@@ -1,0 +1,86 @@
+{
+  "project_info": {
+    "project_number": "1039187320593",
+    "project_id": "free2b-b6221",
+    "storage_bucket": "free2b-b6221.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039187320593:android:0974fed67c137aca92b6b0",
+        "android_client_info": {
+          "package_name": "com.free2bapp.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1039187320593-0fiiccvo4c62j8jli028j4fuplc14nk5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.free2bapp.mobile",
+            "certificate_hash": "a50ad16241823fa52d9dba3ee662b2c03678f0bf"
+          }
+        },
+        {
+          "client_id": "1039187320593-8qj366pn8lgp2lglg0k5rffqp2rfs0a9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.free2bapp.mobile",
+            "certificate_hash": "9dfffc8a3a7870bb36995df7381ea87fd81bbe51"
+          }
+        },
+        {
+          "client_id": "1039187320593-bb6j0ite11a9lhevotdiq1ani6hikltb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.free2bapp.mobile",
+            "certificate_hash": "892614915971733feb6e4f27e875c741e565a132"
+          }
+        },
+        {
+          "client_id": "1039187320593-jk2d7agd2j0v2v69ek2ccosb4a6dap98.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.free2bapp.mobile",
+            "certificate_hash": "0f440bb8be9215640cde2c465f2072b627d15f45"
+          }
+        },
+        {
+          "client_id": "1039187320593-o533qf0lmi1ddfcv9i40vclgo5d4v7u8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.free2bapp.mobile",
+            "certificate_hash": "7e7dc83d3599f4c8bd045fcf093bb218896dfd0f"
+          }
+        },
+        {
+          "client_id": "1039187320593-3rmm8srkatnlh74v7j446lpa6gddrojq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc4rcJIvf1_JOpRl_8vCkRl0a9wIXhVuI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1039187320593-3rmm8srkatnlh74v7j446lpa6gddrojq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1039187320593-gvkbmnec3h02tsshb9upl6fkk1h2ltd7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.free2bapp.mobile"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
