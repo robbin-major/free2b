@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';

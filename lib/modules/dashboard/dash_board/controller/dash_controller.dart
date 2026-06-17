@@ -7,9 +7,6 @@ import 'package:flutter_template/widget/app_snackbar.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 
-import '../../../../utils/app_preferences.dart';
-import '../../profile/controller/profile_setting_controller.dart';
-
 class DashBoardController extends GetxController {
   RxInt currentIndex = 0.obs;
 

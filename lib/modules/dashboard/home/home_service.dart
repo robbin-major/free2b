@@ -1,14 +1,10 @@
-import 'dart:developer';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 import 'package:flutter_template/modules/authentication/model/user_model.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/enum/common_enums.dart';
 import 'package:flutter_template/utils/utils.dart';
-import 'package:intl/intl.dart';
 
 import 'model/category_model.dart';
 

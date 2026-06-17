@@ -14,7 +14,6 @@ import 'package:flutter_template/widget/appbar.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/custom_button.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 import '../../../../utils/navigation_utils/navigation.dart';
 import '../../../../utils/utils.dart';

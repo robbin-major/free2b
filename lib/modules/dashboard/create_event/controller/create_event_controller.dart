@@ -9,18 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/dashboard/home/model/category_model.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/utils.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:get/get.dart';
-import 'package:get/get_rx/get_rx.dart';
 import 'package:get/state_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:timezone/timezone.dart';
 import '../../../../utils/app_string.dart';
 import '../../../../utils/navigation_utils/navigation.dart';
 import '../../../../utils/navigation_utils/routes.dart';
-import '../../../../utils/utils.dart';
-import '../../../../widget/for_use_category/lib/multiselect_dropdown.dart';
 import '../../home/home_service.dart';
 import '../../home/model/event_model.dart';
 

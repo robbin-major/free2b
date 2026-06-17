@@ -4,16 +4,12 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/widget/for_use_category/lib/widgets/hint_text.dart';
 import 'package:flutter_template/widget/for_use_category/lib/widgets/selection_chip.dart';
 import 'package:flutter_template/widget/for_use_category/lib/widgets/single_selected_item.dart';
-import 'package:get/get_utils/get_utils.dart';
 import 'package:http/http.dart';
 import 'package:http/http.dart' as http;
 
-import '../../../utils/app_colors.dart';
-import '../../custom_textfeild.dart';
 import 'models/chip_config.dart';
 import 'models/network_config.dart';
 import 'models/value_item.dart';

@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -7,13 +5,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/modules/dashboard/bookmark/controller/book_mark_controller.dart';
 import 'package:flutter_template/modules/dashboard/calender/controller/celender_controller.dart';
 import 'package:flutter_template/modules/dashboard/dash_board/controller/dash_controller.dart';
-import 'package:flutter_template/modules/dashboard/profile/controller/profile_controller.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:get/get.dart';
-
-import '../../../../utils/enum/common_enums.dart';
 
 class DashBoard extends StatelessWidget {
   DashBoard({super.key});

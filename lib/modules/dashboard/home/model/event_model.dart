@@ -43,7 +43,6 @@ class EventModel {
     this.categoryType,
   });
 
-  @override
   EventModel copy() =>
       EventModel(
         image: image,
@@ -62,7 +61,6 @@ class EventModel {
         categoryType: categoryType,
       );
 
-  @override
   EventModel copyWith({String? country,
     String? uid,
     String? address,

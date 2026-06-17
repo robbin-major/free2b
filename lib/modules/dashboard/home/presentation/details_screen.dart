@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -76,7 +75,7 @@ class DetailsScreen extends StatelessWidget {
                                 '👉🏾 $downloadUrl\n',
                           );
 
-                          final result = await SharePlus.instance.share(params);
+                          await SharePlus.instance.share(params);
 
                         },
                         child: Container(

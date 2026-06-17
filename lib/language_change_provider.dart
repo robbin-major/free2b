@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_template/generated/l10n.dart';
 import 'package:flutter_template/utils/language/language_spanish.dart';
 import 'package:flutter_template/utils/language/language_us.dart';
 import 'package:get/get.dart';

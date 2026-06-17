@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -15,7 +13,6 @@ import 'package:intl/intl.dart';
 import '../../../../utils/navigation_utils/navigation.dart';
 import '../../../../utils/navigation_utils/routes.dart';
 import '../../../../utils/utils.dart';
-import '../../home/controller/home_controller.dart';
 
 class EventSlider extends StatefulWidget {
   final DateTime initialSelectedDay;
@@ -204,4 +201,3 @@ class _EventSliderState extends State<EventSlider> {
     }
   }
 }
-

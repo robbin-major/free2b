@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +7,6 @@ import 'package:flutter_template/firebase_options.dart';
 import 'package:flutter_template/free2b.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/standalone.dart' as tz;
 
 Future<void> main() async {
 
@@ -43,5 +39,4 @@ Future<void> main() async {
   runApp(MyApp());
   // crashlytics.recordError(error, stack));
 }
-
 

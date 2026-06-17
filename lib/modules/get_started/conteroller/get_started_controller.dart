@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:get/get.dart';
 
 import '../../../utils/app_string.dart';

@@ -15,8 +15,6 @@ import 'package:flutter_template/widget/custom_loading_widget.dart';
 import 'package:flutter_template/widget/custom_switch_Button.dart';
 import 'package:get/get.dart';
 
-import '../../../../utils/remove_data/remove_data_service.dart';
-
 class AccountSetting extends StatefulWidget {
   const AccountSetting({Key? key}) : super(key: key);
 

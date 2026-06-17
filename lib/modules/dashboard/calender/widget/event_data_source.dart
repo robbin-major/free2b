@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
-import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/utils.dart';
 import 'package:intl/intl.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';

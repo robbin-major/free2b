@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../api/exception/app_exception.dart';
 
 extension Validator on String {
