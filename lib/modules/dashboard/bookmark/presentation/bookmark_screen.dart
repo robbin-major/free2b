@@ -11,6 +11,7 @@ import 'package:flutter_template/utils/utils.dart';
 import 'package:flutter_template/widget/appbar.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/custom_loading_widget.dart';
+import 'package:flutter_template/widget/event_image.dart';
 import 'package:get/get.dart';
 
 import '../../../../utils/common_service/app_pref_service.dart';
@@ -80,20 +81,12 @@ class BookMarkScreen extends StatelessWidget {
                                         Hero(
                                           tag: index,
                                           transitionOnUserGestures: true,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                                image: (eventData.image?.isNotEmpty ?? false)
-                                                    ? DecorationImage(
-                                                        image: NetworkImage(eventData.image ?? ''),
-                                                        fit: BoxFit.cover,
-                                                      )
-                                                    : const DecorationImage(
-                                                        image: AssetImage(TempImage.tempImage1),
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                borderRadius: BorderRadius.circular(7.58.r)),
+                                          child: EventImage(
+                                            imageUrl: eventData.image,
                                             height: 146.h,
                                             width: 130.w,
+                                            borderRadius:
+                                                BorderRadius.circular(7.58.r),
                                           ),
                                         ),
                                         Expanded(

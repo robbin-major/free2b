@@ -14,6 +14,7 @@ import 'package:flutter_template/widget/appbar.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/custom_loading_widget.dart';
 import 'package:flutter_template/widget/custom_search_bar.dart';
+import 'package:flutter_template/widget/event_image.dart';
 import 'package:get/get.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -231,21 +232,18 @@ class HomeScreen extends StatelessWidget {
                                         topLeft: Radius.circular(20.r),
                                         topRight: Radius.circular(20.r),
                                       ),
-                                      image: (data.image?.isNotEmpty ?? false)
-                                          ? DecorationImage(
-                                              image: NetworkImage(
-                                                  data.image ?? ''),
-                                              fit: BoxFit.cover,
-                                            )
-                                          : const DecorationImage(
-                                              image: AssetImage(
-                                                TempImage.tempImage1,
-                                              ),
-                                              fit: BoxFit.cover,
-                                            ),
                                     ),
                                     child: Stack(
                                       children: [
+                                        Positioned.fill(
+                                          child: EventImage(
+                                            imageUrl: data.image,
+                                            borderRadius: BorderRadius.only(
+                                              topLeft: Radius.circular(20.r),
+                                              topRight: Radius.circular(20.r),
+                                            ),
+                                          ),
+                                        ),
                                         Positioned(
                                           child: Container(
                                             color:
