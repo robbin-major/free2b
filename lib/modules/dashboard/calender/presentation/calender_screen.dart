@@ -19,12 +19,26 @@ class CalenderScreen extends StatefulWidget {
 
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
+  static const double _calendarPadding = 12.0;
+  static const double _calendarHeaderHeight = 58.0;
+  static const double _weekdayHeaderHeight = 36.0;
+  static const double _monthCellMinHeight = 64.0;
+  static const double _monthCellTargetHeight = 76.0;
+  static const double _monthCardVerticalInset = 8.0;
+  late DateTime _displayedMonth;
 
   final Gradient free2BGradient = LinearGradient(
     colors: [Color(0xFFF6E27F), Color(0xFFD4AF37)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    final DateTime now = DateTime.now();
+    _displayedMonth = DateTime(now.year, now.month);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +56,25 @@ class _CalenderScreenState extends State<CalenderScreen> {
             : LayoutBuilder(
                 builder: (context, constraints) {
                   final double availableHeight =
-                      max(0.0, constraints.maxHeight - 24);
-                  final double targetHeight = constraints.maxWidth * 1.15;
+                      max(0.0, constraints.maxHeight - (_calendarPadding * 2));
+                  final int weeksInDisplayedMonth =
+                      _weeksInMonthView(_displayedMonth);
+                  final double targetCellHeight = min(
+                    _monthCellTargetHeight,
+                    max(
+                      _monthCellMinHeight,
+                      constraints.maxWidth / 7,
+                    ),
+                  );
+                  final double contentHeight = _calendarHeaderHeight +
+                      _weekdayHeaderHeight +
+                      (targetCellHeight * weeksInDisplayedMonth) +
+                      _monthCardVerticalInset;
                   final double calendarHeight =
-                      min(availableHeight, max(430.0, targetHeight));
+                      min(availableHeight, contentHeight);
 
                   return Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.all(_calendarPadding),
                     child: Align(
                       alignment: Alignment.topCenter,
                       child: Container(
@@ -79,9 +105,10 @@ class _CalenderScreenState extends State<CalenderScreen> {
                           ),
                           todayHighlightColor: const Color(0xFFF6E27F),
                           headerDateFormat: "MMMM yyyy",
-                          headerHeight: 58,
-                          viewHeaderHeight: 36,
+                          headerHeight: _calendarHeaderHeight,
+                          viewHeaderHeight: _weekdayHeaderHeight,
                           initialDisplayDate: DateTime.now(),
+                          onViewChanged: _handleViewChanged,
                           monthCellBuilder: (
                             BuildContext context,
                             MonthCellDetails details,
@@ -96,6 +123,10 @@ class _CalenderScreenState extends State<CalenderScreen> {
                             final bool isVisibleMonth =
                                 details.date.month == visibleMonthDate.month &&
                                     details.date.year == visibleMonthDate.year;
+
+                            if (!isVisibleMonth) {
+                              return const SizedBox.shrink();
+                            }
 
                             return Container(
                               alignment: Alignment.topCenter,
@@ -112,39 +143,37 @@ class _CalenderScreenState extends State<CalenderScreen> {
                                   ),
                                 ),
                               ),
-                              child: !isVisibleMonth
-                                  ? const SizedBox.shrink()
-                                  : isToday
-                                      ? Container(
-                                          width: 34,
-                                          height: 34,
-                                          decoration: const BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Color(0xFFF6E27F),
-                                                Color(0xFFD4AF37),
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            '${details.date.day}',
-                                            style: const TextStyle(
-                                              color: Colors.black,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        )
-                                      : Text(
-                                          '${details.date.day}',
-                                          style: TextStyle(
-                                            color: AppColors.textColor,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                              child: isToday
+                                  ? Container(
+                                      width: 34,
+                                      height: 34,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Color(0xFFF6E27F),
+                                            Color(0xFFD4AF37),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
                                         ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${details.date.day}',
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    )
+                                  : Text(
+                                      '${details.date.day}',
+                                      style: TextStyle(
+                                        color: AppColors.textColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                             );
                           },
                           selectionDecoration: BoxDecoration(
@@ -180,12 +209,12 @@ class _CalenderScreenState extends State<CalenderScreen> {
                               color: AppColors.textColor,
                             ),
                           ),
-                          monthViewSettings: const MonthViewSettings(
+                          monthViewSettings: MonthViewSettings(
                             appointmentDisplayMode:
                                 MonthAppointmentDisplayMode.indicator,
                             showAgenda: false,
                             showTrailingAndLeadingDates: false,
-                            numberOfWeeksInView: 6,
+                            numberOfWeeksInView: weeksInDisplayedMonth,
                           ),
                           appointmentBuilder: (context, details) {
                             return Center(
@@ -207,6 +236,13 @@ class _CalenderScreenState extends State<CalenderScreen> {
                             );
                           },
                           onTap: (calendarTapDetails) {
+                            if (calendarTapDetails.date == null ||
+                                calendarTapDetails.date!.month !=
+                                    _displayedMonth.month ||
+                                calendarTapDetails.date!.year !=
+                                    _displayedMonth.year) {
+                              return;
+                            }
                             _calenderController.currentDate =
                                 calendarTapDetails.date;
                             _showEventSlider(context, calendarTapDetails.date);
@@ -219,6 +255,39 @@ class _CalenderScreenState extends State<CalenderScreen> {
               ),
       ),
     );
+  }
+
+  void _handleViewChanged(ViewChangedDetails details) {
+    if (details.visibleDates.isEmpty) {
+      return;
+    }
+
+    final DateTime middleDate =
+        details.visibleDates[details.visibleDates.length ~/ 2];
+    final DateTime newDisplayedMonth =
+        DateTime(middleDate.year, middleDate.month);
+
+    if (newDisplayedMonth.year == _displayedMonth.year &&
+        newDisplayedMonth.month == _displayedMonth.month) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _displayedMonth = newDisplayedMonth;
+      });
+    });
+  }
+
+  int _weeksInMonthView(DateTime month) {
+    final DateTime firstDayOfMonth = DateTime(month.year, month.month);
+    final DateTime lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
+    final int leadingWeekdaySlots = firstDayOfMonth.weekday % 7;
+    return ((leadingWeekdaySlots + lastDayOfMonth.day) / 7).ceil();
   }
 
   Future<void> _showEventSlider(BuildContext context, selectedDay) async {
