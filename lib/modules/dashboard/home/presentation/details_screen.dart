@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -10,7 +9,7 @@ import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/utils.dart';
 import 'package:flutter_template/widget/common_text.dart';
-import 'package:flutter_template/widget/custom_loading_widget.dart';
+import 'package:flutter_template/widget/event_image.dart';
 import 'package:flutter_template/widget/login_popup.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
@@ -35,22 +34,11 @@ class DetailsScreen extends StatelessWidget {
                 children: [
                   Hero(
                     tag: _detailController.eventModel.image ?? '',
-                    child: CachedNetworkImage(
+                    child: EventImage(
                       width: Get.width,
                       height: 400.h,
-                      filterQuality: FilterQuality.none,
-                      imageUrl: _detailController.eventModel.image ?? '',
+                      imageUrl: _detailController.eventModel.image,
                       fit: BoxFit.cover,
-                      errorWidget: (context, url, error) {
-                        return SizedBox(
-                            height: Get.height * 0.25,
-                            child: const Icon(Icons.error));
-                      },
-                      progressIndicatorBuilder: (context, url, progress) {
-                        return SizedBox(
-                            height: Get.height * 0.2,
-                            child: const CustomLoadingWidget());
-                      },
                     ),
                   ),
                   Row(
