@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/dashboard/calender/controller/celender_controller.dart';
 import 'package:flutter_template/modules/dashboard/calender/presentation/event_slider.dart';
@@ -35,117 +37,186 @@ class _CalenderScreenState extends State<CalenderScreen> {
         automaticallyImplyLeading: false,
       ),
       body: Obx(
-            () => _calenderController.isLoading.value
+        () => _calenderController.isLoading.value
             ? const Center(child: CircularProgressIndicator())
-            : Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SfCalendar(
-              controller: _calenderController.calendarController,
-              view: CalendarView.month,
-              initialSelectedDate: _calenderController.currentDate,
-              dataSource: EventDataSource(_calenderController.getDataSource()),
-              todayHighlightColor: Color(0xFFF6E27F),
-              headerDateFormat: "MMMM",
-              headerHeight: 50,
-              viewHeaderHeight: 30,
-              initialDisplayDate: DateTime.now(),
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final double availableHeight =
+                      max(0.0, constraints.maxHeight - 24);
+                  final double targetHeight = constraints.maxWidth * 1.15;
+                  final double calendarHeight =
+                      min(availableHeight, max(430.0, targetHeight));
 
-              monthCellBuilder: (BuildContext context, MonthCellDetails details) {
-                final bool isToday = DateUtils.isSameDay(details.date, DateTime.now());
+                  return Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        height: calendarHeight,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.backgroundLightColor,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: AppColors.dividerColor.withOpacity(0.8),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: SfCalendar(
+                          controller: _calenderController.calendarController,
+                          view: CalendarView.month,
+                          initialSelectedDate:
+                              _calenderController.currentDate,
+                          dataSource: EventDataSource(
+                            _calenderController.getDataSource(),
+                          ),
+                          todayHighlightColor: const Color(0xFFF6E27F),
+                          headerDateFormat: "MMMM yyyy",
+                          headerHeight: 58,
+                          viewHeaderHeight: 36,
+                          initialDisplayDate: DateTime.now(),
+                          monthCellBuilder: (
+                            BuildContext context,
+                            MonthCellDetails details,
+                          ) {
+                            final bool isToday = DateUtils.isSameDay(
+                              details.date,
+                              DateTime.now(),
+                            );
+                            final DateTime visibleMonthDate =
+                                details.visibleDates[
+                                    details.visibleDates.length ~/ 2];
+                            final bool isVisibleMonth =
+                                details.date.month == visibleMonthDate.month &&
+                                    details.date.year == visibleMonthDate.year;
 
-                return Center(
-                  child: isToday
-                      ? Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFF6E27F), Color(0xFFD4AF37)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                            return Container(
+                              alignment: Alignment.topCenter,
+                              padding: const EdgeInsets.only(top: 10),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                    color:
+                                        AppColors.dividerColor.withOpacity(0.45),
+                                  ),
+                                  left: BorderSide(
+                                    color:
+                                        AppColors.dividerColor.withOpacity(0.45),
+                                  ),
+                                ),
+                              ),
+                              child: !isVisibleMonth
+                                  ? const SizedBox.shrink()
+                                  : isToday
+                                      ? Container(
+                                          width: 34,
+                                          height: 34,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Color(0xFFF6E27F),
+                                                Color(0xFFD4AF37),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            '${details.date.day}',
+                                            style: const TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        )
+                                      : Text(
+                                          '${details.date.day}',
+                                          style: TextStyle(
+                                            color: AppColors.textColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                            );
+                          },
+                          selectionDecoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.transparent,
+                            border: Border.all(
+                              width: 1.5,
+                              color: const Color(0xFFD4AF37),
+                            ),
+                          ),
+                          headerStyle: CalendarHeaderStyle(
+                            textAlign: TextAlign.center,
+                            backgroundColor: AppColors.backgroundLightColor,
+                            textStyle: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              foreground: Paint()
+                                ..shader = const LinearGradient(
+                                  colors: [
+                                    Color(0xFFF6E27F),
+                                    Color(0xFFD4AF37),
+                                  ],
+                                ).createShader(
+                                  const Rect.fromLTWH(0, 0, 220, 70),
+                                ),
+                            ),
+                          ),
+                          viewHeaderStyle: ViewHeaderStyle(
+                            backgroundColor: AppColors.backgroundLightColor,
+                            dayTextStyle: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textColor,
+                            ),
+                          ),
+                          monthViewSettings: const MonthViewSettings(
+                            appointmentDisplayMode:
+                                MonthAppointmentDisplayMode.indicator,
+                            showAgenda: false,
+                            showTrailingAndLeadingDates: false,
+                            numberOfWeeksInView: 6,
+                          ),
+                          appointmentBuilder: (context, details) {
+                            return Center(
+                              child: Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color(0xFFF6E27F),
+                                      Color(0xFFD4AF37),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          onTap: (calendarTapDetails) {
+                            _calenderController.currentDate =
+                                calendarTapDetails.date;
+                            _showEventSlider(context, calendarTapDetails.date);
+                          },
+                        ),
                       ),
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${details.date.day}',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                      : Text(
-                    '${details.date.day}',
-                    style: TextStyle(
-                      color: AppColors.textColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              },
-
-              selectionDecoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.transparent,
-                border: Border.all(
-                  width: 1,
-                  color: Color(0xFFF6E27F), // We'll overlay gradient later
-                ),
-                // Use a foreground gradient as a border
+                  );
+                },
               ),
-
-              headerStyle: CalendarHeaderStyle(
-                textAlign: TextAlign.center,
-                textStyle: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  foreground: Paint()
-                    ..shader = LinearGradient(
-                      colors: [Color(0xFFF6E27F), Color(0xFFD4AF37)],
-                    ).createShader(Rect.fromLTWH(0, 0, 200, 70)),
-                ),
-              ),
-
-              viewHeaderStyle: ViewHeaderStyle(
-                dayTextStyle: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textColor,
-                ),
-              ),
-
-              monthViewSettings: MonthViewSettings(
-                appointmentDisplayMode: MonthAppointmentDisplayMode.indicator,
-                showAgenda: false,
-              ),
-
-              appointmentBuilder: (context, details) {
-                return Center(
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFF6E27F), Color(0xFFD4AF37)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                );
-              },
-
-              onTap: (calendarTapDetails) {
-                _calenderController.currentDate = calendarTapDetails.date;
-                _showEventSlider(context, calendarTapDetails.date);
-              },
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -169,7 +240,6 @@ class _CalenderScreenState extends State<CalenderScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.max,
             children: [
-
               GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
                 child: Container(
@@ -182,14 +252,15 @@ class _CalenderScreenState extends State<CalenderScreen> {
                   ),
                 ),
               ),
-
               // Actual content
               Expanded(
                 child: EventSlider(
                   initialSelectedDay: selectedDay,
                   onchangeDate: (DateTime dateTime) {
-                    _calenderController.calendarController.selectedDate = dateTime;
-                    _calenderController.calendarController.displayDate = dateTime;
+                    _calenderController.calendarController.selectedDate =
+                        dateTime;
+                    _calenderController.calendarController.displayDate =
+                        dateTime;
                   },
                   eventData: _calenderController.eventData,
                 ),
@@ -219,4 +290,3 @@ class _CalenderScreenState extends State<CalenderScreen> {
 //     );
 //   }
 // }
-
