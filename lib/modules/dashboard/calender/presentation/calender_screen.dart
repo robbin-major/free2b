@@ -20,13 +20,16 @@ class CalenderScreen extends StatefulWidget {
 
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
-  static const double _calendarPadding = 16.0;
+  static const EdgeInsets _calendarPadding =
+      EdgeInsets.fromLTRB(16, 16, 16, 34);
   static const double _calendarHeaderHeight = 82.0;
   static const double _weekdayHeaderHeight = 48.0;
   static const double _monthCellMinHeight = 78.0;
   static const double _monthCellTargetHeight = 96.0;
   static const double _monthGridVerticalPadding = 20.0;
-  static const double _monthCardVerticalInset = 28.0;
+  static const double _monthLegendHeight = 48.0;
+  static const double _monthCardVerticalInset = 22.0;
+  static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
   late DateTime _baseMonth;
@@ -81,10 +84,11 @@ class _CalenderScreenState extends State<CalenderScreen> {
                       _weekdayHeaderHeight +
                       (targetCellHeight * weeksInDisplayedMonth) +
                       _monthGridVerticalPadding +
+                      _monthLegendHeight +
                       _monthCardVerticalInset;
 
                   return Padding(
-                    padding: const EdgeInsets.all(_calendarPadding),
+                    padding: _calendarPadding,
                     child: SingleChildScrollView(
                       child: Align(
                         alignment: Alignment.topCenter,
@@ -102,7 +106,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
                             ),
                             borderRadius: BorderRadius.circular(28),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.08),
+                              color: const Color(0xFF4A4A4A).withOpacity(0.42),
+                              width: 1.0,
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -163,6 +168,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                                   },
                                 ),
                               ),
+                              _buildEventLegend(),
                               const SizedBox(height: _monthCardVerticalInset),
                             ],
                           ),
@@ -216,7 +222,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: index == 0
-                        ? const Color(0xFFF6D05F)
+                        ? _mutedGold
                         : Colors.white.withOpacity(0.64),
                   ),
                 ),
@@ -286,28 +292,46 @@ class _CalenderScreenState extends State<CalenderScreen> {
           '${date.day}',
           style: TextStyle(
             color: hasEvents
-                ? const Color(0xFFF6D05F)
+                ? _mutedGold
                 : Colors.white.withOpacity(isToday ? 0.95 : 0.82),
-            fontSize: hasEvents ? 25 : 23,
+            fontSize: hasEvents ? 22 : 20,
             fontWeight: hasEvents ? FontWeight.w800 : FontWeight.w500,
             height: 1,
             shadows: hasEvents
                 ? [
                     Shadow(
-                      color: const Color(0xFFD4AF37).withOpacity(0.75),
-                      blurRadius: 18,
+                      color: _mutedGold.withOpacity(0.42),
+                      blurRadius: 10,
                     ),
                     Shadow(
-                      color: const Color(0xFFD4AF37).withOpacity(0.42),
-                      blurRadius: 34,
-                    ),
-                    Shadow(
-                      color: const Color(0xFFF6E27F).withOpacity(0.22),
-                      blurRadius: 52,
+                      color: _mutedGold.withOpacity(0.20),
+                      blurRadius: 22,
                     ),
                   ]
                 : null,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventLegend() {
+    return SizedBox(
+      height: _monthLegendHeight,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Gold dates have events',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.58),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
         ),
       ),
     );
