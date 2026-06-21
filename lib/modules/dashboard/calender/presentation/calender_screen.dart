@@ -20,12 +20,13 @@ class CalenderScreen extends StatefulWidget {
 
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
-  static const double _calendarPadding = 12.0;
-  static const double _calendarHeaderHeight = 58.0;
-  static const double _weekdayHeaderHeight = 36.0;
-  static const double _monthCellMinHeight = 64.0;
-  static const double _monthCellTargetHeight = 76.0;
-  static const double _monthCardVerticalInset = 8.0;
+  static const double _calendarPadding = 16.0;
+  static const double _calendarHeaderHeight = 82.0;
+  static const double _weekdayHeaderHeight = 48.0;
+  static const double _monthCellMinHeight = 78.0;
+  static const double _monthCellTargetHeight = 96.0;
+  static const double _monthGridVerticalPadding = 20.0;
+  static const double _monthCardVerticalInset = 28.0;
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
   late DateTime _baseMonth;
@@ -73,12 +74,13 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     _monthCellTargetHeight,
                     max(
                       _monthCellMinHeight,
-                      constraints.maxWidth / 7,
+                      constraints.maxWidth * 0.22,
                     ),
                   );
                   final double contentHeight = _calendarHeaderHeight +
                       _weekdayHeaderHeight +
                       (targetCellHeight * weeksInDisplayedMonth) +
+                      _monthGridVerticalPadding +
                       _monthCardVerticalInset;
 
                   return Padding(
@@ -90,16 +92,29 @@ class _CalenderScreenState extends State<CalenderScreen> {
                           height: contentHeight,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                            color: AppColors.backgroundLightColor,
-                            borderRadius: BorderRadius.circular(22),
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF1A1A1A),
+                                Color(0xFF111111),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(28),
                             border: Border.all(
-                              color: AppColors.dividerColor.withOpacity(0.8),
+                              color: Colors.white.withOpacity(0.08),
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
+                                color: Colors.black.withOpacity(0.32),
+                                blurRadius: 28,
+                                offset: const Offset(0, 18),
+                              ),
+                              BoxShadow(
+                                color: const Color(0xFFD4AF37)
+                                    .withOpacity(0.04),
+                                blurRadius: 42,
+                                offset: const Offset(0, 8),
                               ),
                             ],
                           ),
@@ -113,8 +128,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
                                     DateFormat('MMMM yyyy')
                                         .format(_displayedMonth),
                                     style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
+                                      fontSize: 27,
+                                      fontWeight: FontWeight.w800,
                                       foreground: Paint()
                                         ..shader = const LinearGradient(
                                           colors: [
@@ -131,7 +146,9 @@ class _CalenderScreenState extends State<CalenderScreen> {
                               _buildWeekdayHeader(),
                               SizedBox(
                                 height:
-                                    targetCellHeight * weeksInDisplayedMonth,
+                                    (targetCellHeight *
+                                            weeksInDisplayedMonth) +
+                                        _monthGridVerticalPadding,
                                 child: PageView.builder(
                                   controller: _monthPageController,
                                   onPageChanged: _handleMonthPageChanged,
@@ -181,27 +198,32 @@ class _CalenderScreenState extends State<CalenderScreen> {
   }
 
   Widget _buildWeekdayHeader() {
-    const List<String> weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const List<String> weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     return SizedBox(
       height: _weekdayHeaderHeight,
       child: Row(
-        children: weekdays
-            .map(
-              (day) => Expanded(
-                child: Center(
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textColor,
-                    ),
+        children: List.generate(
+          weekdays.length,
+          (index) {
+            final String day = weekdays[index];
+
+            return Expanded(
+              child: Center(
+                child: Text(
+                  day,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: index == 0
+                        ? const Color(0xFFF6D05F)
+                        : Colors.white.withOpacity(0.64),
                   ),
                 ),
               ),
-            )
-            .toList(),
+            );
+          },
+        ),
       ),
     );
   }
@@ -217,34 +239,30 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final int trailingSlots = (7 - ((leadingSlots + dayCount) % 7)) % 7;
     final int totalCells = leadingSlots + dayCount + trailingSlots;
 
-    return GridView.builder(
-      padding: EdgeInsets.zero,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: totalCells,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        mainAxisExtent: cellHeight,
-      ),
-      itemBuilder: (context, index) {
-        if (index < leadingSlots || index >= leadingSlots + dayCount) {
-          return _buildBlankCalendarCell();
-        }
-
-        final DateTime date =
-            DateTime(month.year, month.month, index - leadingSlots + 1);
-
-        return _buildDateCell(date);
-      },
-    );
-  }
-
-  Widget _buildBlankCalendarCell() {
-    return Container(
+    return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: AppColors.dividerColor.withOpacity(0.45)),
-          left: BorderSide(color: AppColors.dividerColor.withOpacity(0.45)),
+          top: BorderSide(color: Colors.white.withOpacity(0.05)),
         ),
+      ),
+      child: GridView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: totalCells,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 7,
+          mainAxisExtent: cellHeight,
+        ),
+        itemBuilder: (context, index) {
+          if (index < leadingSlots || index >= leadingSlots + dayCount) {
+            return const SizedBox.shrink();
+          }
+
+          final DateTime date =
+              DateTime(month.year, month.month, index - leadingSlots + 1);
+
+          return _buildDateCell(date);
+        },
       ),
     );
   }
@@ -252,8 +270,10 @@ class _CalenderScreenState extends State<CalenderScreen> {
   Widget _buildDateCell(DateTime date) {
     final bool isToday = DateUtils.isSameDay(date, DateTime.now());
     final List<EventModel> eventsForDay = _eventsForDay(date);
+    final bool hasEvents = eventsForDay.isNotEmpty;
 
     return InkWell(
+      borderRadius: BorderRadius.circular(18),
       onTap: () {
         _calenderController.currentDate = date;
         _calenderController.calendarController.selectedDate = date;
@@ -261,82 +281,33 @@ class _CalenderScreenState extends State<CalenderScreen> {
         _showEventSlider(context, date);
       },
       child: Container(
-        alignment: Alignment.topCenter,
-        padding: const EdgeInsets.only(top: 8),
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: AppColors.dividerColor.withOpacity(0.45)),
-            left: BorderSide(color: AppColors.dividerColor.withOpacity(0.45)),
+        alignment: Alignment.center,
+        child: Text(
+          '${date.day}',
+          style: TextStyle(
+            color: hasEvents
+                ? const Color(0xFFF6D05F)
+                : Colors.white.withOpacity(isToday ? 0.95 : 0.82),
+            fontSize: hasEvents ? 25 : 23,
+            fontWeight: hasEvents ? FontWeight.w800 : FontWeight.w500,
+            height: 1,
+            shadows: hasEvents
+                ? [
+                    Shadow(
+                      color: const Color(0xFFD4AF37).withOpacity(0.75),
+                      blurRadius: 18,
+                    ),
+                    Shadow(
+                      color: const Color(0xFFD4AF37).withOpacity(0.42),
+                      blurRadius: 34,
+                    ),
+                    Shadow(
+                      color: const Color(0xFFF6E27F).withOpacity(0.22),
+                      blurRadius: 52,
+                    ),
+                  ]
+                : null,
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            isToday
-                ? Container(
-                    width: 34,
-                    height: 34,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          Color(0xFFF6E27F),
-                          Color(0xFFD4AF37),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${date.day}',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                : SizedBox(
-                    height: 34,
-                    child: Center(
-                      child: Text(
-                        '${date.day}',
-                        style: TextStyle(
-                          color: AppColors.textColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-            if (eventsForDay.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: eventsForDay
-                    .take(3)
-                    .map(
-                      (_) => Container(
-                        width: 7,
-                        height: 7,
-                        margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Color(0xFFF6E27F),
-                              Color(0xFFD4AF37),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ],
         ),
       ),
     );
