@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "free2b-b6221"
+  },
+  "targets": {
+    "free2b-b6221": {
+      "hosting": {
+        "flutter": [
+          "free2b-mobile-web"
+        ]
+      }
+    }
   }
 }
