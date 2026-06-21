@@ -14,6 +14,8 @@ jobs:
   build-web:
     name: Build Flutter web
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_FREE2B_B6221 }}
 
     steps:
       - name: Checkout
@@ -38,3 +40,12 @@ jobs:
 
       - name: Build web
         run: flutter build web
+
+      - name: Deploy to Firebase Hosting
+        if: github.ref == 'refs/heads/main' && env.FIREBASE_SERVICE_ACCOUNT != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_FREE2B_B6221 }}
+          projectId: free2b-b6221
+          channelId: live
