@@ -2,6 +2,12 @@ name: Flutter Web Build
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy Flutter web to Firebase Hosting
+        required: true
+        default: false
+        type: boolean
   pull_request:
     branches:
       - main
@@ -42,7 +48,7 @@ jobs:
         run: flutter build web
 
       - name: Deploy to Firebase Hosting
-        if: github.ref == 'refs/heads/main' && env.FIREBASE_SERVICE_ACCOUNT != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy == true && env.FIREBASE_SERVICE_ACCOUNT != ''
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
