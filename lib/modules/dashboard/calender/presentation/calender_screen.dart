@@ -21,14 +21,14 @@ class CalenderScreen extends StatefulWidget {
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
   static const EdgeInsets _calendarPadding =
-      EdgeInsets.fromLTRB(16, 16, 16, 34);
-  static const double _calendarHeaderHeight = 82.0;
-  static const double _weekdayHeaderHeight = 48.0;
-  static const double _monthCellMinHeight = 78.0;
-  static const double _monthCellTargetHeight = 96.0;
-  static const double _monthGridVerticalPadding = 20.0;
-  static const double _monthLegendHeight = 48.0;
-  static const double _monthCardVerticalInset = 22.0;
+      EdgeInsets.fromLTRB(16, 12, 16, 18);
+  static const double _calendarHeaderHeight = 58.0;
+  static const double _weekdayHeaderHeight = 34.0;
+  static const double _monthCellMinHeight = 48.0;
+  static const double _monthCellTargetHeight = 68.0;
+  static const double _monthGridVerticalPadding = 10.0;
+  static const double _monthLegendHeight = 34.0;
+  static const double _monthCardVerticalInset = 12.0;
   static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
@@ -73,12 +73,23 @@ class _CalenderScreenState extends State<CalenderScreen> {
                 builder: (context, constraints) {
                   final int weeksInDisplayedMonth =
                       _weeksInMonthView(_displayedMonth);
+                  final double availableCardHeight = max(
+                    0.0,
+                    constraints.maxHeight - _calendarPadding.vertical,
+                  );
+                  final double fixedCardHeight = _calendarHeaderHeight +
+                      _weekdayHeaderHeight +
+                      _monthGridVerticalPadding +
+                      _monthLegendHeight +
+                      _monthCardVerticalInset;
+                  final double heightBasedCellHeight = max(
+                    _monthCellMinHeight,
+                    (availableCardHeight - fixedCardHeight) /
+                        weeksInDisplayedMonth,
+                  );
                   final double targetCellHeight = min(
                     _monthCellTargetHeight,
-                    max(
-                      _monthCellMinHeight,
-                      constraints.maxWidth * 0.22,
-                    ),
+                    min(constraints.maxWidth * 0.18, heightBasedCellHeight),
                   );
                   final double contentHeight = _calendarHeaderHeight +
                       _weekdayHeaderHeight +
@@ -89,89 +100,84 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
                   return Padding(
                     padding: _calendarPadding,
-                    child: SingleChildScrollView(
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        child: Container(
-                          height: contentHeight,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF1A1A1A),
-                                Color(0xFF111111),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: const Color(0xFF4A4A4A).withOpacity(0.42),
-                              width: 1.0,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.32),
-                                blurRadius: 28,
-                                offset: const Offset(0, 18),
-                              ),
-                              BoxShadow(
-                                color: const Color(0xFFD4AF37)
-                                    .withOpacity(0.04),
-                                blurRadius: 42,
-                                offset: const Offset(0, 8),
-                              ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        height: min(contentHeight, availableCardHeight),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF1A1A1A),
+                              Color(0xFF111111),
                             ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                height: _calendarHeaderHeight,
-                                child: Center(
-                                  child: Text(
-                                    DateFormat('MMMM yyyy')
-                                        .format(_displayedMonth),
-                                    style: TextStyle(
-                                      fontSize: 27,
-                                      fontWeight: FontWeight.w800,
-                                      foreground: Paint()
-                                        ..shader = const LinearGradient(
-                                          colors: [
-                                            Color(0xFFF6E27F),
-                                            Color(0xFFD4AF37),
-                                          ],
-                                        ).createShader(
-                                          const Rect.fromLTWH(0, 0, 220, 70),
-                                        ),
-                                    ),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: const Color(0xFF4A4A4A).withOpacity(0.42),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.32),
+                              blurRadius: 28,
+                              offset: const Offset(0, 18),
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFFD4AF37).withOpacity(0.04),
+                              blurRadius: 42,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: _calendarHeaderHeight,
+                              child: Center(
+                                child: Text(
+                                  DateFormat('MMMM yyyy')
+                                      .format(_displayedMonth),
+                                  style: TextStyle(
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w800,
+                                    foreground: Paint()
+                                      ..shader = const LinearGradient(
+                                        colors: [
+                                          Color(0xFFF6E27F),
+                                          Color(0xFFD4AF37),
+                                        ],
+                                      ).createShader(
+                                        const Rect.fromLTWH(0, 0, 220, 70),
+                                      ),
                                   ),
                                 ),
                               ),
-                              _buildWeekdayHeader(),
-                              SizedBox(
-                                height:
-                                    (targetCellHeight *
-                                            weeksInDisplayedMonth) +
-                                        _monthGridVerticalPadding,
-                                child: PageView.builder(
-                                  controller: _monthPageController,
-                                  onPageChanged: _handleMonthPageChanged,
-                                  itemBuilder: (context, index) {
-                                    final DateTime month =
-                                        _monthForPage(index);
+                            ),
+                            _buildWeekdayHeader(),
+                            SizedBox(
+                              height:
+                                  (targetCellHeight * weeksInDisplayedMonth) +
+                                      _monthGridVerticalPadding,
+                              child: PageView.builder(
+                                controller: _monthPageController,
+                                onPageChanged: _handleMonthPageChanged,
+                                itemBuilder: (context, index) {
+                                  final DateTime month = _monthForPage(index);
 
-                                    return _buildMonthGrid(
-                                      month: month,
-                                      cellHeight: targetCellHeight,
-                                    );
-                                  },
-                                ),
+                                  return _buildMonthGrid(
+                                    month: month,
+                                    cellHeight: targetCellHeight,
+                                  );
+                                },
                               ),
-                              _buildEventLegend(),
-                              const SizedBox(height: _monthCardVerticalInset),
-                            ],
-                          ),
+                            ),
+                            _buildEventLegend(),
+                            const SizedBox(height: _monthCardVerticalInset),
+                          ],
                         ),
                       ),
                     ),
@@ -219,7 +225,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                 child: Text(
                   day,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: index == 0
                         ? _mutedGold
@@ -252,7 +258,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
         ),
       ),
       child: GridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         physics: const NeverScrollableScrollPhysics(),
         itemCount: totalCells,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -294,7 +300,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
             color: hasEvents
                 ? _mutedGold
                 : Colors.white.withOpacity(isToday ? 0.95 : 0.82),
-            fontSize: hasEvents ? 22 : 20,
+            fontSize: hasEvents ? 19 : 18,
             fontWeight: hasEvents ? FontWeight.w800 : FontWeight.w500,
             height: 1,
             shadows: hasEvents
@@ -326,7 +332,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
               'Gold dates have events',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.58),
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 0,
               ),
