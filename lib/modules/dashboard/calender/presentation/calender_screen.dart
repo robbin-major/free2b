@@ -212,6 +212,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
   Widget _buildWeekdayHeader() {
     const List<String> weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    final int currentWeekdayIndex = DateTime.now().weekday % 7;
 
     return SizedBox(
       height: _weekdayHeaderHeight,
@@ -228,7 +229,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: index == 0
+                    color: index == currentWeekdayIndex
                         ? _mutedGold
                         : Colors.white.withOpacity(0.64),
                   ),
