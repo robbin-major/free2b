@@ -30,8 +30,6 @@ class _CalenderScreenState extends State<CalenderScreen> {
   static const double _monthGridVerticalPadding = 10.0;
   static const double _monthLegendHeight = 34.0;
   static const double _monthCardVerticalInset = 12.0;
-  static const double _agendaGap = 14.0;
-  static const double _minimumAgendaHeight = 160.0;
   static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
@@ -79,10 +77,6 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     0.0,
                     constraints.maxHeight - _calendarPadding.vertical,
                   );
-                  final double availableCardHeight = max(
-                    0.0,
-                    availableBodyHeight - _agendaGap - _minimumAgendaHeight,
-                  );
                   final double fixedCardHeight = _calendarHeaderHeight +
                       _weekdayHeaderHeight +
                       _monthGridVerticalPadding +
@@ -90,7 +84,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                       _monthCardVerticalInset;
                   final double heightBasedCellHeight = max(
                     _monthCellMinHeight,
-                    (availableCardHeight - fixedCardHeight) /
+                    (availableBodyHeight - fixedCardHeight) /
                         weeksInDisplayedMonth,
                   );
                   final double targetCellHeight = min(
@@ -106,90 +100,86 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
                   return Padding(
                     padding: _calendarPadding,
-                    child: Column(
-                      children: [
-                        Container(
-                          height: min(contentHeight, availableCardHeight),
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                Color(0xFF1A1A1A),
-                                Color(0xFF111111),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: const Color(0xFF4A4A4A).withOpacity(0.42),
-                              width: 1.0,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.32),
-                                blurRadius: 28,
-                                offset: const Offset(0, 18),
-                              ),
-                              BoxShadow(
-                                color:
-                                    const Color(0xFFD4AF37).withOpacity(0.04),
-                                blurRadius: 42,
-                                offset: const Offset(0, 8),
-                              ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        height: min(contentHeight, availableBodyHeight),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF1A1A1A),
+                              Color(0xFF111111),
                             ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                height: _calendarHeaderHeight,
-                                child: Center(
-                                  child: Text(
-                                    DateFormat('MMMM yyyy')
-                                        .format(_displayedMonth),
-                                    style: TextStyle(
-                                      fontSize: 23,
-                                      fontWeight: FontWeight.w800,
-                                      foreground: Paint()
-                                        ..shader = const LinearGradient(
-                                          colors: [
-                                            Color(0xFFF6E27F),
-                                            Color(0xFFD4AF37),
-                                          ],
-                                        ).createShader(
-                                          const Rect.fromLTWH(0, 0, 220, 70),
-                                        ),
-                                    ),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: const Color(0xFF4A4A4A).withOpacity(0.42),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.32),
+                              blurRadius: 28,
+                              offset: const Offset(0, 18),
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFFD4AF37).withOpacity(0.04),
+                              blurRadius: 42,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: _calendarHeaderHeight,
+                              child: Center(
+                                child: Text(
+                                  DateFormat('MMMM yyyy')
+                                      .format(_displayedMonth),
+                                  style: TextStyle(
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w800,
+                                    foreground: Paint()
+                                      ..shader = const LinearGradient(
+                                        colors: [
+                                          Color(0xFFF6E27F),
+                                          Color(0xFFD4AF37),
+                                        ],
+                                      ).createShader(
+                                        const Rect.fromLTWH(0, 0, 220, 70),
+                                      ),
                                   ),
                                 ),
                               ),
-                              _buildWeekdayHeader(),
-                              SizedBox(
-                                height:
-                                    (targetCellHeight * weeksInDisplayedMonth) +
-                                        _monthGridVerticalPadding,
-                                child: PageView.builder(
-                                  controller: _monthPageController,
-                                  onPageChanged: _handleMonthPageChanged,
-                                  itemBuilder: (context, index) {
-                                    final DateTime month = _monthForPage(index);
+                            ),
+                            _buildWeekdayHeader(),
+                            SizedBox(
+                              height:
+                                  (targetCellHeight * weeksInDisplayedMonth) +
+                                      _monthGridVerticalPadding,
+                              child: PageView.builder(
+                                controller: _monthPageController,
+                                onPageChanged: _handleMonthPageChanged,
+                                itemBuilder: (context, index) {
+                                  final DateTime month = _monthForPage(index);
 
-                                    return _buildMonthGrid(
-                                      month: month,
-                                      cellHeight: targetCellHeight,
-                                    );
-                                  },
-                                ),
+                                  return _buildMonthGrid(
+                                    month: month,
+                                    cellHeight: targetCellHeight,
+                                  );
+                                },
                               ),
-                              _buildEventLegend(),
-                              const SizedBox(height: _monthCardVerticalInset),
-                            ],
-                          ),
+                            ),
+                            _buildEventLegend(),
+                            const SizedBox(height: _monthCardVerticalInset),
+                          ],
                         ),
-                        const SizedBox(height: _agendaGap),
-                        Expanded(child: _buildAgendaSection()),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -307,6 +297,9 @@ class _CalenderScreenState extends State<CalenderScreen> {
         setState(() {
           _selectedDate = date;
         });
+        if (hasEvents) {
+          _showEventSheet(context, date, eventsForDay);
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -389,8 +382,12 @@ class _CalenderScreenState extends State<CalenderScreen> {
         .isBefore(DateTime(today.year, today.month, today.day));
   }
 
-  Widget _buildAgendaSection() {
-    final List<EventModel> selectedEvents = _eventsForDay(_selectedDate)
+  Future<void> _showEventSheet(
+    BuildContext context,
+    DateTime selectedDate,
+    List<EventModel> events,
+  ) async {
+    final List<EventModel> selectedEvents = List<EventModel>.from(events)
       ..sort((a, b) {
         final DateTime? aDate = _eventDate(a);
         final DateTime? bDate = _eventDate(b);
@@ -401,31 +398,64 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
         return aDate.compareTo(bDate);
       });
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.88,
+          minChildSize: 0.45,
+          maxChildSize: 0.96,
+          expand: false,
+          builder: (context, scrollController) {
+            return _buildEventSheetContent(
+              selectedDate: selectedDate,
+              selectedEvents: selectedEvents,
+              scrollController: scrollController,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEventSheetContent({
+    required DateTime selectedDate,
+    required List<EventModel> selectedEvents,
+    required ScrollController scrollController,
+  }) {
     final String eventCount =
         '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
 
     return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-          width: 1,
-        ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF111112),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: Column(
         children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 52,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.34),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
             child: Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 54,
+                  width: 56,
+                  height: 62,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.black.withOpacity(0.22),
+                    borderRadius: BorderRadius.circular(18),
                     border: Border.all(
                       color: _mutedGold.withOpacity(0.35),
                     ),
@@ -434,20 +464,20 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        DateFormat('d').format(_selectedDate),
+                        DateFormat('d').format(selectedDate),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 19,
+                          fontSize: 22,
                           fontWeight: FontWeight.w800,
                           height: 1,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 6),
                       Text(
-                        DateFormat('EEE').format(_selectedDate).toUpperCase(),
+                        DateFormat('EEE').format(selectedDate).toUpperCase(),
                         style: TextStyle(
                           color: _mutedGold,
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0,
                         ),
@@ -461,12 +491,12 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        DateFormat('EEEE, MMMM d').format(_selectedDate),
+                        DateFormat('EEEE, MMMM d').format(selectedDate),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 17,
+                          fontSize: 20,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0,
                         ),
@@ -488,32 +518,17 @@ class _CalenderScreenState extends State<CalenderScreen> {
           ),
           Divider(height: 1, color: Colors.white.withOpacity(0.08)),
           Expanded(
-            child: selectedEvents.isEmpty
-                ? _buildEmptyAgenda()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-                    itemCount: selectedEvents.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      return _buildAgendaCard(selectedEvents[index]);
-                    },
-                  ),
+            child: ListView.separated(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              itemCount: selectedEvents.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                return _buildAgendaCard(selectedEvents[index]);
+              },
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyAgenda() {
-    return Center(
-      child: Text(
-        AppString.noAnEvent,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.55),
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
       ),
     );
   }
@@ -530,6 +545,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () {
+          Navigator.of(context).pop();
           Navigation.pushNamed(
             Routes.detailsScreen,
             arg: event,
