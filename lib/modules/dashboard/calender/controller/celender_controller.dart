@@ -1,4 +1,3 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
@@ -7,7 +6,6 @@ import 'package:syncfusion_flutter_calendar/calendar.dart';
 
 class CalenderController extends GetxController {
   final CalendarController calendarController = CalendarController();
-  CarouselController carouselController = CarouselController();
   DateTime? currentDate;
   RxList<EventModel> eventData = <EventModel>[].obs;
   RxBool isLoading = false.obs;
