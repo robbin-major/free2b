@@ -4,8 +4,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/modules/dashboard/home/controller/details_controller.dart';
 import 'package:flutter_template/utils/app_colors.dart';
+import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/utils.dart';
 import 'package:flutter_template/widget/common_text.dart';
@@ -167,12 +169,30 @@ class DetailsScreen extends StatelessWidget {
                             format: "hh:mm a",
                             date: _detailController.eventModel.startDate
                                 .toString(),
-                          )}",
+                        )}",
                         fontWeight: FontWeight.w600,
                         fontSize: 12.sp,
                       ),
                     ],
                   ).paddingOnly(bottom: 6.h),
+                  if (_hasEventEnded(_detailController.eventModel.startDate))
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10.w,
+                        vertical: 5.h,
+                      ),
+                      margin: EdgeInsets.only(bottom: 10.h),
+                      decoration: BoxDecoration(
+                        color: AppColors.disableButtonColor.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
+                      child: CommonText(
+                        text: AppString.eventHasPassed,
+                        color: AppColors.disableButtonColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.sp,
+                      ),
+                    ),
                   GestureDetector(
                     onTap: () {
                       print("google map");
@@ -219,5 +239,13 @@ class DetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _hasEventEnded(String? startDate) {
+    final DateTime? eventDateTime =
+        EventDateUtils.parseEventDateTime(startDate);
+
+    return eventDateTime != null &&
+        EventDateUtils.hasEventEnded(eventDateTime);
   }
 }

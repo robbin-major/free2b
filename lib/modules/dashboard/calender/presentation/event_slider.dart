@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,6 +6,7 @@ import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -15,7 +14,6 @@ import 'package:intl/intl.dart';
 import '../../../../utils/navigation_utils/navigation.dart';
 import '../../../../utils/navigation_utils/routes.dart';
 import '../../../../utils/utils.dart';
-import '../../home/controller/home_controller.dart';
 
 class EventSlider extends StatefulWidget {
   final DateTime initialSelectedDay;
@@ -152,11 +150,24 @@ class _EventSliderState extends State<EventSlider> {
                                       ),
                                     ).paddingOnly(right: 12.w),
                                     Flexible(
-                                      child: CommonText(
-                                        text: pageEvents[index].title ??
-                                            "",
-                                        overflow: TextOverflow.ellipsis,
-                                        fontSize: 14.sp,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          CommonText(
+                                            text: pageEvents[index].title ?? "",
+                                            overflow: TextOverflow.ellipsis,
+                                            fontSize: 14.sp,
+                                          ),
+                                          if (_hasEventEnded(pageEvents[index]))
+                                            CommonText(
+                                              text: AppString.eventEnded,
+                                              color: AppColors
+                                                  .disableButtonColor,
+                                              fontSize: 11.sp,
+                                              fontWeight: FontWeight.w600,
+                                            ).paddingOnly(top: 2.h),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -203,5 +214,12 @@ class _EventSliderState extends State<EventSlider> {
         return Colors.red;
     }
   }
-}
 
+  bool _hasEventEnded(EventModel event) {
+    final DateTime? eventDateTime =
+        EventDateUtils.parseEventDateTime(event.startDate);
+
+    return eventDateTime != null &&
+        EventDateUtils.hasEventEnded(eventDateTime);
+  }
+}

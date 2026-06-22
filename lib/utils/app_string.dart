@@ -84,6 +84,8 @@ class AppString {
   static const String close = 'Close';
   static const String selectYourCategory = 'Select your Category';
   static const String noAnEvent = 'This date is not an event.';
+  static const String eventEnded = 'Event ended';
+  static const String eventHasPassed = 'This event has passed';
   static const String login = 'LogIn';
   static const String searchHere = 'Search here...';
   static const String continueText = 'Continue';

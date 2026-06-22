@@ -6,7 +6,7 @@ import 'package:flutter_template/modules/dashboard/calender/presentation/event_s
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
-import 'package:flutter_template/utils/utils.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/widget/appbar.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -354,19 +354,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
   }
 
   DateTime? _eventDate(EventModel event) {
-    final String? startDate = event.startDate;
-
-    if (startDate == null || startDate.isEmpty) {
-      return null;
-    }
-
-    try {
-      return DateFormat('dd-MM-yyyy').parse(
-        Utils.getFormattedDate(date: startDate, format: 'dd-MM-yyyy'),
-      );
-    } catch (_) {
-      return null;
-    }
+    return EventDateUtils.parseEventDateTime(event.startDate);
   }
 
   Future<void> _showEventSlider(BuildContext context, selectedDay) async {
