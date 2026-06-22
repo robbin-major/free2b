@@ -298,7 +298,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
           _selectedDate = date;
         });
         if (hasEvents) {
-          _showEventSheet(context, date, eventsForDay);
+          _showEventSheet(context, date);
         }
       },
       child: AnimatedContainer(
@@ -372,6 +372,20 @@ class _CalenderScreenState extends State<CalenderScreen> {
     }).toList();
   }
 
+  List<EventModel> _sortedEventsForDay(DateTime date) {
+    return _eventsForDay(date)
+      ..sort((a, b) {
+        final DateTime? aDate = _eventDate(a);
+        final DateTime? bDate = _eventDate(b);
+
+        if (aDate == null || bDate == null) {
+          return 0;
+        }
+
+        return aDate.compareTo(bDate);
+      });
+  }
+
   DateTime? _eventDate(EventModel event) {
     return EventDateUtils.parseEventDateTime(event.startDate);
   }
@@ -385,19 +399,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
   Future<void> _showEventSheet(
     BuildContext context,
     DateTime selectedDate,
-    List<EventModel> events,
   ) async {
-    final List<EventModel> selectedEvents = List<EventModel>.from(events)
-      ..sort((a, b) {
-        final DateTime? aDate = _eventDate(a);
-        final DateTime? bDate = _eventDate(b);
-
-        if (aDate == null || bDate == null) {
-          return 0;
-        }
-
-        return aDate.compareTo(bDate);
-      });
+    DateTime sheetSelectedDate = selectedDate;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -405,16 +408,38 @@ class _CalenderScreenState extends State<CalenderScreen> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.88,
-          minChildSize: 0.45,
-          maxChildSize: 0.96,
-          expand: false,
-          builder: (context, scrollController) {
-            return _buildEventSheetContent(
-              selectedDate: selectedDate,
-              selectedEvents: selectedEvents,
-              scrollController: scrollController,
+        return StatefulBuilder(
+          builder: (context, sheetSetState) {
+            void moveDay(int dayOffset) {
+              final DateTime nextDate =
+                  sheetSelectedDate.add(Duration(days: dayOffset));
+
+              setState(() {
+                _selectedDate = nextDate;
+                _calenderController.currentDate = nextDate;
+                _calenderController.calendarController.selectedDate = nextDate;
+                _calenderController.calendarController.displayDate = nextDate;
+              });
+
+              sheetSetState(() {
+                sheetSelectedDate = nextDate;
+              });
+            }
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.88,
+              minChildSize: 0.45,
+              maxChildSize: 0.96,
+              expand: false,
+              builder: (context, scrollController) {
+                return _buildEventSheetContent(
+                  selectedDate: sheetSelectedDate,
+                  selectedEvents: _sortedEventsForDay(sheetSelectedDate),
+                  scrollController: scrollController,
+                  onPreviousDay: () => moveDay(-1),
+                  onNextDay: () => moveDay(1),
+                );
+              },
             );
           },
         );
@@ -426,6 +451,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
     required DateTime selectedDate,
     required List<EventModel> selectedEvents,
     required ScrollController scrollController,
+    required VoidCallback onPreviousDay,
+    required VoidCallback onNextDay,
   }) {
     final String eventCount =
         '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
@@ -450,45 +477,14 @@ class _CalenderScreenState extends State<CalenderScreen> {
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
             child: Row(
               children: [
-                Container(
-                  width: 56,
-                  height: 62,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.22),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: _mutedGold.withOpacity(0.35),
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        DateFormat('d').format(selectedDate),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          height: 1,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        DateFormat('EEE').format(selectedDate).toUpperCase(),
-                        style: TextStyle(
-                          color: _mutedGold,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    ],
-                  ),
+                _buildSheetDayButton(
+                  icon: Icons.chevron_left,
+                  onTap: onPreviousDay,
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
                         DateFormat('EEEE, MMMM d').format(selectedDate),
@@ -513,22 +509,66 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
+                _buildSheetDayButton(
+                  icon: Icons.chevron_right,
+                  onTap: onNextDay,
+                ),
               ],
             ),
           ),
           Divider(height: 1, color: Colors.white.withOpacity(0.08)),
           Expanded(
-            child: ListView.separated(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-              itemCount: selectedEvents.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return _buildAgendaCard(selectedEvents[index]);
-              },
-            ),
+            child: selectedEvents.isEmpty
+                ? _buildEmptySheetDay()
+                : ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                    itemCount: selectedEvents.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      return _buildAgendaCard(selectedEvents[index]);
+                    },
+                  ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSheetDayButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Ink(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          color: _mutedGold,
+          size: 28,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptySheetDay() {
+    return Center(
+      child: Text(
+        AppString.noAnEvent,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.58),
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -571,39 +611,36 @@ class _CalenderScreenState extends State<CalenderScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width: 72,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                width: 96,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: ended
-                                ? Colors.white.withOpacity(0.42)
-                                : _mutedGold,
-                            shape: BoxShape.circle,
-                          ),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color:
+                            ended ? Colors.white.withOpacity(0.42) : _mutedGold,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        timeText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          color: ended
+                              ? Colors.white.withOpacity(0.70)
+                              : _mutedGold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          letterSpacing: 0,
                         ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            timeText,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: ended
-                                  ? Colors.white.withOpacity(0.70)
-                                  : _mutedGold,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              height: 1.25,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
