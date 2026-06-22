@@ -2,11 +2,12 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/dashboard/calender/controller/celender_controller.dart';
-import 'package:flutter_template/modules/dashboard/calender/presentation/event_slider.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/navigation_utils/navigation.dart';
+import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/appbar.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -29,17 +30,14 @@ class _CalenderScreenState extends State<CalenderScreen> {
   static const double _monthGridVerticalPadding = 10.0;
   static const double _monthLegendHeight = 34.0;
   static const double _monthCardVerticalInset = 12.0;
+  static const double _agendaGap = 14.0;
+  static const double _minimumAgendaHeight = 160.0;
   static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
   late DateTime _baseMonth;
   late DateTime _displayedMonth;
-
-  final Gradient free2BGradient = LinearGradient(
-    colors: [Color(0xFFF6E27F), Color(0xFFD4AF37)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  late DateTime _selectedDate;
 
   @override
   void initState() {
@@ -47,6 +45,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final DateTime now = DateTime.now();
     _baseMonth = DateTime(now.year, now.month);
     _displayedMonth = _baseMonth;
+    _selectedDate = DateTime(now.year, now.month, now.day);
     _monthPageController = PageController(initialPage: _initialMonthPage);
   }
 
@@ -76,9 +75,13 @@ class _CalenderScreenState extends State<CalenderScreen> {
                 builder: (context, constraints) {
                   final int weeksInDisplayedMonth =
                       _weeksInMonthView(_displayedMonth);
-                  final double availableCardHeight = max(
+                  final double availableBodyHeight = max(
                     0.0,
                     constraints.maxHeight - _calendarPadding.vertical,
+                  );
+                  final double availableCardHeight = max(
+                    0.0,
+                    availableBodyHeight - _agendaGap - _minimumAgendaHeight,
                   );
                   final double fixedCardHeight = _calendarHeaderHeight +
                       _weekdayHeaderHeight +
@@ -103,86 +106,90 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
                   return Padding(
                     padding: _calendarPadding,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        height: min(contentHeight, availableCardHeight),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF1A1A1A),
-                              Color(0xFF111111),
+                    child: Column(
+                      children: [
+                        Container(
+                          height: min(contentHeight, availableCardHeight),
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF1A1A1A),
+                                Color(0xFF111111),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(28),
+                            border: Border.all(
+                              color: const Color(0xFF4A4A4A).withOpacity(0.42),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.32),
+                                blurRadius: 28,
+                                offset: const Offset(0, 18),
+                              ),
+                              BoxShadow(
+                                color:
+                                    const Color(0xFFD4AF37).withOpacity(0.04),
+                                blurRadius: 42,
+                                offset: const Offset(0, 8),
+                              ),
                             ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: const Color(0xFF4A4A4A).withOpacity(0.42),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.32),
-                              blurRadius: 28,
-                              offset: const Offset(0, 18),
-                            ),
-                            BoxShadow(
-                              color: const Color(0xFFD4AF37).withOpacity(0.04),
-                              blurRadius: 42,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              height: _calendarHeaderHeight,
-                              child: Center(
-                                child: Text(
-                                  DateFormat('MMMM yyyy')
-                                      .format(_displayedMonth),
-                                  style: TextStyle(
-                                    fontSize: 23,
-                                    fontWeight: FontWeight.w800,
-                                    foreground: Paint()
-                                      ..shader = const LinearGradient(
-                                        colors: [
-                                          Color(0xFFF6E27F),
-                                          Color(0xFFD4AF37),
-                                        ],
-                                      ).createShader(
-                                        const Rect.fromLTWH(0, 0, 220, 70),
-                                      ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              SizedBox(
+                                height: _calendarHeaderHeight,
+                                child: Center(
+                                  child: Text(
+                                    DateFormat('MMMM yyyy')
+                                        .format(_displayedMonth),
+                                    style: TextStyle(
+                                      fontSize: 23,
+                                      fontWeight: FontWeight.w800,
+                                      foreground: Paint()
+                                        ..shader = const LinearGradient(
+                                          colors: [
+                                            Color(0xFFF6E27F),
+                                            Color(0xFFD4AF37),
+                                          ],
+                                        ).createShader(
+                                          const Rect.fromLTWH(0, 0, 220, 70),
+                                        ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            _buildWeekdayHeader(),
-                            SizedBox(
-                              height:
-                                  (targetCellHeight * weeksInDisplayedMonth) +
-                                      _monthGridVerticalPadding,
-                              child: PageView.builder(
-                                controller: _monthPageController,
-                                onPageChanged: _handleMonthPageChanged,
-                                itemBuilder: (context, index) {
-                                  final DateTime month = _monthForPage(index);
+                              _buildWeekdayHeader(),
+                              SizedBox(
+                                height:
+                                    (targetCellHeight * weeksInDisplayedMonth) +
+                                        _monthGridVerticalPadding,
+                                child: PageView.builder(
+                                  controller: _monthPageController,
+                                  onPageChanged: _handleMonthPageChanged,
+                                  itemBuilder: (context, index) {
+                                    final DateTime month = _monthForPage(index);
 
-                                  return _buildMonthGrid(
-                                    month: month,
-                                    cellHeight: targetCellHeight,
-                                  );
-                                },
+                                    return _buildMonthGrid(
+                                      month: month,
+                                      cellHeight: targetCellHeight,
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                            _buildEventLegend(),
-                            const SizedBox(height: _monthCardVerticalInset),
-                          ],
+                              _buildEventLegend(),
+                              const SizedBox(height: _monthCardVerticalInset),
+                            ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: _agendaGap),
+                        Expanded(child: _buildAgendaSection()),
+                      ],
                     ),
                   );
                 },
@@ -209,6 +216,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
     setState(() {
       _displayedMonth =
           DateTime(newDisplayedMonth.year, newDisplayedMonth.month);
+      _selectedDate = _displayedMonth;
     });
   }
 
@@ -284,8 +292,11 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
   Widget _buildDateCell(DateTime date) {
     final bool isToday = DateUtils.isSameDay(date, DateTime.now());
+    final bool isPastDate = _isPastDate(date);
+    final bool isSelected = DateUtils.isSameDay(date, _selectedDate);
     final List<EventModel> eventsForDay = _eventsForDay(date);
     final bool hasEvents = eventsForDay.isNotEmpty;
+    final bool hasActiveEvents = hasEvents && !isPastDate;
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -293,20 +304,28 @@ class _CalenderScreenState extends State<CalenderScreen> {
         _calenderController.currentDate = date;
         _calenderController.calendarController.selectedDate = date;
         _calenderController.calendarController.displayDate = date;
-        _showEventSlider(context, date);
+        setState(() {
+          _selectedDate = date;
+        });
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
         alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color:
+              isSelected ? Colors.white.withOpacity(0.06) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Text(
           '${date.day}',
           style: TextStyle(
-            color: hasEvents
+            color: hasActiveEvents
                 ? _mutedGold
                 : Colors.white.withOpacity(isToday ? 0.95 : 0.82),
-            fontSize: hasEvents ? 19 : 18,
-            fontWeight: hasEvents ? FontWeight.w800 : FontWeight.w500,
+            fontSize: hasActiveEvents ? 19 : 18,
+            fontWeight: hasActiveEvents ? FontWeight.w800 : FontWeight.w500,
             height: 1,
-            shadows: hasEvents
+            shadows: hasActiveEvents
                 ? [
                     Shadow(
                       color: _mutedGold.withOpacity(0.42),
@@ -317,6 +336,13 @@ class _CalenderScreenState extends State<CalenderScreen> {
                       blurRadius: 22,
                     ),
                   ]
+                : hasEvents && isPastDate
+                    ? [
+                        Shadow(
+                          color: Colors.white.withOpacity(0.16),
+                          blurRadius: 8,
+                        ),
+                      ]
                 : null,
           ),
         ),
@@ -332,7 +358,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Gold dates have events',
+              'Gold dates are upcoming events',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.58),
                 fontSize: 12,
@@ -357,72 +383,329 @@ class _CalenderScreenState extends State<CalenderScreen> {
     return EventDateUtils.parseEventDateTime(event.startDate);
   }
 
-  Future<void> _showEventSlider(BuildContext context, selectedDay) async {
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
+  bool _isPastDate(DateTime date) {
+    final DateTime today = DateTime.now();
+    return DateTime(date.year, date.month, date.day)
+        .isBefore(DateTime(today.year, today.month, today.day));
+  }
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: screenHeight - statusBarHeight,
-          margin: EdgeInsets.only(top: statusBarHeight),
-          decoration: BoxDecoration(
-            color: AppColors.backgroundColor,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  width: 70,
-                  height: 5,
-                  margin: const EdgeInsets.only(top: 15, bottom: 20),
+  Widget _buildAgendaSection() {
+    final List<EventModel> selectedEvents = _eventsForDay(_selectedDate)
+      ..sort((a, b) {
+        final DateTime? aDate = _eventDate(a);
+        final DateTime? bDate = _eventDate(b);
+
+        if (aDate == null || bDate == null) {
+          return 0;
+        }
+
+        return aDate.compareTo(bDate);
+      });
+    final String eventCount =
+        '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 54,
                   decoration: BoxDecoration(
-                    color: Colors.white38,
-                    borderRadius: BorderRadius.circular(3),
+                    color: Colors.black.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _mutedGold.withOpacity(0.35),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        DateFormat('d').format(_selectedDate),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          height: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        DateFormat('EEE').format(_selectedDate).toUpperCase(),
+                        style: TextStyle(
+                          color: _mutedGold,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              // Actual content
-              Expanded(
-                child: EventSlider(
-                  initialSelectedDay: selectedDay,
-                  onchangeDate: (DateTime dateTime) {
-                    _calenderController.calendarController.selectedDate =
-                        dateTime;
-                    _calenderController.calendarController.displayDate =
-                        dateTime;
-                  },
-                  eventData: _calenderController.eventData,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        DateFormat('EEEE, MMMM d').format(_selectedDate),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        eventCount,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.62),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+          Divider(height: 1, color: Colors.white.withOpacity(0.08)),
+          Expanded(
+            child: selectedEvents.isEmpty
+                ? _buildEmptyAgenda()
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                    itemCount: selectedEvents.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      return _buildAgendaCard(selectedEvents[index]);
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
+  Widget _buildEmptyAgenda() {
+    return Center(
+      child: Text(
+        AppString.noAnEvent,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.55),
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAgendaCard(EventModel event) {
+    final DateTime? eventDateTime = _eventDate(event);
+    final bool ended = eventDateTime != null &&
+        EventDateUtils.hasEventEnded(eventDateTime);
+    final String timeText = _formatEventTime(eventDateTime);
+    final String location = _eventLocation(event);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          Navigation.pushNamed(
+            Routes.detailsScreen,
+            arg: event,
+          );
+        },
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.08),
+                Colors.white.withOpacity(0.035),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.10),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 72,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: ended
+                                ? Colors.white.withOpacity(0.42)
+                                : _mutedGold,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            timeText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: ended
+                                  ? Colors.white.withOpacity(0.70)
+                                  : _mutedGold,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 54,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                color: Colors.white.withOpacity(0.08),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        height: 1.18,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (location.isNotEmpty)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 15,
+                            color: Colors.white.withOpacity(0.55),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              location,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.58),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (ended) ...[
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.schedule,
+                              size: 12,
+                              color: Colors.white.withOpacity(0.62),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              AppString.eventEnded,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.66),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: _mutedGold,
+                size: 26,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatEventTime(DateTime? eventDateTime) {
+    if (eventDateTime == null) {
+      return '--';
+    }
+
+    return DateFormat('h:mm a').format(eventDateTime);
+  }
+
+  String _eventLocation(EventModel event) {
+    if ((event.aptSuiteOther ?? '').trim().isNotEmpty) {
+      return event.aptSuiteOther!.trim();
+    }
+
+    if ((event.address ?? '').trim().isNotEmpty) {
+      return event.address!.trim();
+    }
+
+    return [
+      event.city,
+      event.state,
+    ].where((value) => (value ?? '').trim().isNotEmpty).join(', ');
+  }
+
 }
-//
-//   Future<void> _showEventSlider(BuildContext context, selectedDay) {
-//     return showDialog(
-//       context: context,
-//       builder: (context) {
-//         return EventSlider(
-//           initialSelectedDay: selectedDay,
-//           onchangeDate: (DateTime dateTime) {
-//             _calenderController.calendarController.selectedDate = dateTime;
-//             _calenderController.calendarController.displayDate = dateTime;
-//           },
-//           eventData: _calenderController.eventData,
-//         );
-//       },
-//     );
-//   }
-// }
