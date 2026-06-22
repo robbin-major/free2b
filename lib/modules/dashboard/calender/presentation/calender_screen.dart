@@ -21,7 +21,7 @@ class CalenderScreen extends StatefulWidget {
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
   static const EdgeInsets _calendarPadding =
-      EdgeInsets.fromLTRB(16, 12, 16, 18);
+      EdgeInsets.fromLTRB(16, 16, 16, 18);
   static const double _calendarHeaderHeight = 58.0;
   static const double _weekdayHeaderHeight = 34.0;
   static const double _monthCellMinHeight = 48.0;
@@ -63,8 +63,11 @@ class _CalenderScreenState extends State<CalenderScreen> {
       appBar: CustomAppBar(
         color: AppColors.backgroundColor,
         title: AppString.calendar,
-        centerTitle: false,
+        centerTitle: true,
         automaticallyImplyLeading: false,
+        fontColor: _mutedGold,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
       ),
       body: Obx(
         () => _calenderController.isLoading.value
