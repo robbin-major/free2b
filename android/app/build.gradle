@@ -31,6 +31,23 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def releaseStoreFile = System.getenv('ANDROID_KEYSTORE_PATH') ?: keystoreProperties['storeFile']
+def releaseStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: keystoreProperties['storePassword']
+def releaseKeyAlias = System.getenv('ANDROID_KEY_ALIAS') ?: keystoreProperties['keyAlias']
+def releaseKeyPassword = System.getenv('ANDROID_KEY_PASSWORD') ?: keystoreProperties['keyPassword']
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def releaseBuildRequested = taskGraph.allTasks.any { task ->
+        def taskName = task.name.toLowerCase()
+        taskName.contains('release') && (taskName.contains('bundle') || taskName.contains('assemble'))
+    }
+
+    if (releaseBuildRequested && !hasReleaseSigning) {
+        throw new GradleException('Missing Android release signing configuration. Set ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD.')
+    }
+}
+
 android {
     compileSdkVersion 36
     ndkVersion flutter.ndkVersion
@@ -49,10 +66,12 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('../key/free2b.jks')
-            storePassword "123456"
-            keyAlias "key"
-            keyPassword "123456"
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
@@ -69,10 +88,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-        }
-        debug {
-            signingConfig signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     namespace 'com.free2bapp.mobile'
