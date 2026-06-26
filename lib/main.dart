@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:ui';
 
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,16 +9,9 @@ import 'package:flutter_template/firebase_options.dart';
 import 'package:flutter_template/free2b.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/standalone.dart' as tz;
 
 Future<void> main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -26,22 +20,87 @@ Future<void> main() async {
       systemNavigationBarColor: AppColors.backgroundColor,
     ),
   );
-  // await Firebase.initializeApp();
-  // await FireBaseNotification().setUpLocalNotification();
-  // FirebaseAnalyticsUtils().init();
-  // FirebaseCrashlytics crashlytics = FirebaseCrashlytics.instance;
-  runZonedGuarded<Future<void>>(() async {
-    // await crashlytics.setCrashlyticsCollectionEnabled(true);
-    // FlutterError.onError = crashlytics.recordFlutterError;
-    await AppPreference.initMySharedPreferences();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-  }, (error, stack) => print(error));
 
-  runApp(MyApp());
-  // crashlytics.recordError(error, stack));
+  var crashlyticsReady = false;
+
+  await runZonedGuarded<Future<void>>(() async {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      crashlyticsReady = true;
+
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      };
+
+      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+
+      await AppPreference.initMySharedPreferences();
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+
+      runApp(const MyApp());
+    } catch (error, stack) {
+      debugPrint('Free2B startup failed: $error');
+      if (crashlyticsReady) {
+        await FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      }
+      runApp(const StartupFallbackApp());
+    }
+  }, (error, stack) {
+    debugPrint('Free2B uncaught error: $error');
+    if (crashlyticsReady) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    }
+  });
 }
 
+class StartupFallbackApp extends StatelessWidget {
+  const StartupFallbackApp({
+    Key? key,
+  }) : super(key: key);
 
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: AppColors.backgroundColor,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Free2B',
+                  style: TextStyle(
+                    color: AppColors.yellowButtonColor,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'We had trouble starting the app. Please close Free2B and try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
