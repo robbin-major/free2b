@@ -88,6 +88,8 @@ android {
 
     buildTypes {
         release {
+            minifyEnabled false
+            shrinkResources false
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
