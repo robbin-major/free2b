@@ -1,11 +1,13 @@
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 
 class CalenderController extends GetxController {
   final CalendarController calendarController = CalendarController();
+  VoidCallback? collapseAgendaSheet;
   DateTime? currentDate;
   RxList<EventModel> eventData = <EventModel>[].obs;
   RxBool isLoading = false.obs;
@@ -39,5 +41,9 @@ class CalenderController extends GetxController {
 
   List<EventModel> getDataSource() {
     return eventData;
+  }
+
+  void collapseAgenda() {
+    collapseAgendaSheet?.call();
   }
 }

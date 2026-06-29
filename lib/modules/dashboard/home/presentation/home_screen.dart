@@ -122,7 +122,9 @@ class HomeScreen extends StatelessWidget {
                 label: CommonText(
                   text: _homeController.locationLabel.value.isEmpty
                       ? 'Use my location'
-                      : 'Near ${_homeController.locationLabel.value}',
+                      : _homeController.locationLabel.value == 'you'
+                          ? 'Near you'
+                          : 'Near ${_homeController.locationLabel.value}',
                   fontSize: 13.sp,
                   fontWeight: FontWeight.w600,
                   color: AppColors.yellowButtonColor,

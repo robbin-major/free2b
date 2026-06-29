@@ -31,9 +31,13 @@ class _CalenderScreenState extends State<CalenderScreen> {
   static const double _monthLegendHeight = 34.0;
   static const double _monthCardVerticalInset = 12.0;
   static const double _agendaPeekHeight = 126.0;
+  static const double _agendaCollapsedSize = 0.24;
+  static const double _agendaMidSize = 0.58;
+  static const double _agendaExpandedSize = 0.94;
   static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
+  late DraggableScrollableController _agendaSheetController;
   late DateTime _baseMonth;
   late DateTime _displayedMonth;
   late DateTime _selectedDate;
@@ -46,10 +50,16 @@ class _CalenderScreenState extends State<CalenderScreen> {
     _displayedMonth = _baseMonth;
     _selectedDate = DateTime(now.year, now.month, now.day);
     _monthPageController = PageController(initialPage: _initialMonthPage);
+    _agendaSheetController = DraggableScrollableController();
+    _calenderController.collapseAgendaSheet = _collapseAgendaSheet;
   }
 
   @override
   void dispose() {
+    if (_calenderController.collapseAgendaSheet == _collapseAgendaSheet) {
+      _calenderController.collapseAgendaSheet = null;
+    }
+    _agendaSheetController.dispose();
     _monthPageController.dispose();
     super.dispose();
   }
@@ -190,11 +200,16 @@ class _CalenderScreenState extends State<CalenderScreen> {
                         ),
                       ),
                       DraggableScrollableSheet(
-                        initialChildSize: 0.22,
-                        minChildSize: 0.16,
-                        maxChildSize: 0.74,
+                        controller: _agendaSheetController,
+                        initialChildSize: _agendaCollapsedSize,
+                        minChildSize: 0.18,
+                        maxChildSize: _agendaExpandedSize,
                         snap: true,
-                        snapSizes: const [0.22, 0.52, 0.74],
+                        snapSizes: const [
+                          _agendaCollapsedSize,
+                          _agendaMidSize,
+                          _agendaExpandedSize,
+                        ],
                         builder: (context, scrollController) {
                           return _buildEventSheetContent(
                             selectedDate: _selectedDate,
@@ -252,6 +267,18 @@ class _CalenderScreenState extends State<CalenderScreen> {
           _baseMonth.month;
       _monthPageController.jumpToPage(targetPage);
     }
+  }
+
+  void _collapseAgendaSheet() {
+    if (!_agendaSheetController.isAttached) {
+      return;
+    }
+
+    _agendaSheetController.animateTo(
+      _agendaCollapsedSize,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Widget _buildWeekdayHeader() {
@@ -483,15 +510,18 @@ class _CalenderScreenState extends State<CalenderScreen> {
         color: Color(0xFF111112),
         borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      child: Column(
+      child: ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 28),
         children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 52,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.34),
-              borderRadius: BorderRadius.circular(999),
+          Center(
+            child: Container(
+              width: 58,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.38),
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
           ),
           Padding(
@@ -541,20 +571,23 @@ class _CalenderScreenState extends State<CalenderScreen> {
             ),
           ),
           Divider(height: 1, color: Colors.white.withOpacity(0.08)),
-          Expanded(
-            child: selectedEvents.isEmpty
-                ? _buildEmptySheetDay()
-                : ListView.separated(
-                    controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-                    itemCount: selectedEvents.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return _buildAgendaCard(selectedEvents[index]);
-                    },
-                  ),
-          ),
+          if (selectedEvents.isEmpty)
+            SizedBox(
+              height: 220,
+              child: _buildEmptySheetDay(),
+            )
+          else
+            ...[
+              const SizedBox(height: 16),
+              for (int index = 0; index < selectedEvents.length; index++) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildAgendaCard(selectedEvents[index]),
+                ),
+                if (index != selectedEvents.length - 1)
+                  const SizedBox(height: 12),
+              ],
+            ],
         ],
       ),
     );

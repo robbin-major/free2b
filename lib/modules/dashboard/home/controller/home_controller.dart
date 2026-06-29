@@ -17,6 +17,7 @@ class HomeController extends GetxController {
   RxBool isLocationLoading = false.obs;
   RxBool isSearch = false.obs;
   RxString locationLabel = ''.obs;
+  RxString locationStatus = ''.obs;
   Timer? _debounce;
   TextEditingController textEditingController = TextEditingController();
   RxList<String> categoryList = <String>[].obs;
@@ -100,18 +101,32 @@ class HomeController extends GetxController {
   Future<void> useCurrentLocation() async {
     try {
       isLocationLoading.value = true;
-      final Placemark? placemark =
-          await AppLocationService.getCurrentPlacemarkIfAllowed();
+      final AppLocationLookupResult result =
+          await AppLocationService.getCurrentLocationIfAllowed();
+      locationStatus.value = result.status;
 
-      if (placemark == null) {
+      if (!result.hasCoordinates) {
         locationLabel.value = '';
         filterEventData.value = eventData;
+        print(
+          'Use current location fallback: ${result.status} ${result.message ?? ''}',
+        );
         return;
       }
 
-      final String city = (placemark.locality ?? placemark.subAdministrativeArea ?? '').trim();
-      final String state = (placemark.administrativeArea ?? '').trim();
-      locationLabel.value = city.isNotEmpty ? city : state;
+      final Placemark? placemark = result.placemark;
+      final String neighborhood = (placemark?.subLocality ?? '').trim();
+      final String city =
+          (placemark?.locality ?? placemark?.subAdministrativeArea ?? '')
+              .trim();
+      final String state = (placemark?.administrativeArea ?? '').trim();
+      locationLabel.value = neighborhood.isNotEmpty
+          ? neighborhood
+          : city.isNotEmpty
+              ? city
+              : state.isNotEmpty
+                  ? state
+                  : 'you';
 
       final List<EventModel> nearbyEvents = eventData.where((event) {
         final String eventCity = (event.city ?? '').toLowerCase();
@@ -123,6 +138,10 @@ class HomeController extends GetxController {
 
       filterEventData.value =
           nearbyEvents.isNotEmpty ? nearbyEvents : eventData;
+      print(
+        'Use current location applied: label=${locationLabel.value}, '
+        'matchedEvents=${nearbyEvents.length}',
+      );
     } catch (error) {
       print('Use current location failed: $error');
       filterEventData.value = eventData;
@@ -133,6 +152,7 @@ class HomeController extends GetxController {
 
   void clearLocationFilter() {
     locationLabel.value = '';
+    locationStatus.value = '';
     filterEventData.value = eventData;
   }
 }

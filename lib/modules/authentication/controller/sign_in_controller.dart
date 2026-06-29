@@ -32,6 +32,10 @@ class SignInController extends GetxController {
       isLoading.value = true;
       var value = await GoogleSignInAuth.signInWithGoogle();
       if (value == null) {
+        print(
+          'Google sign-in did not complete. Check logcat for '
+          'GoogleSignInAuth PlatformException/FirebaseAuthException details.',
+        );
         isLoading.value = false;
         return;
       }
