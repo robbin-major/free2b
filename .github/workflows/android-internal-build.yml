@@ -2,6 +2,9 @@ name: Android Internal Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - verify/auth-location-calendar-agenda
 
 permissions:
   contents: read
@@ -27,6 +30,14 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Upload resolved pubspec.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: free2b-pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Analyze
         continue-on-error: true
