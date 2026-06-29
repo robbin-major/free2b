@@ -3,22 +3,20 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:country_pickers/country.dart';
 import 'package:country_pickers/country_pickers.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/authentication/model/user_model.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/utils/social_authentication/apple_auth.dart';
 import 'package:flutter_template/utils/social_authentication/google_auth.dart';
 import 'package:get/get.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../utils/app_preferences.dart';
 
 class SignInController extends GetxController {
-  GoogleSignIn googleSignIn = GoogleSignIn();
   RxBool isLoading = false.obs;
   RxBool isAppleLoading = false.obs;
   final TextEditingController controller = TextEditingController();
@@ -33,44 +31,38 @@ class SignInController extends GetxController {
     try {
       isLoading.value = true;
       var value = await GoogleSignInAuth.signInWithGoogle();
-      print("value ${value?.uid}");
+      if (value == null) {
+        isLoading.value = false;
+        return;
+      }
+      print("value ${value.uid}");
       DocumentSnapshot documentSnapshot = await FirebaseFirestore.instance
           .collection("users")
-          .doc(value?.uid)
+          .doc(value.uid)
           .get();
 
       if (documentSnapshot.exists) {
-        if (value != null) {
-          AppPrefService.setUserUid(userToken: (value.uid));
-          AppPrefService.setEmail(userEmail: (value.email ?? ''));
-          AppPrefService.setName(userName: (value.displayName ?? ''));
-          AppPrefService.setProfilePhoto(
-              userProfilePhoto: (value.photoURL ?? ''));
-          try {
-            UserModel userModel = UserModel(
-              email: value.email,
-              profilePhoto: value.photoURL,
-              firstName: value.displayName?.split(" ").first,
-              lastName: value.displayName?.split(" ").last,
-            );
-          } catch (e) {
-            print("GoogleSignInAuth : createUser :: error : $e");
-          }
-          Navigation.replaceAll(Routes.dashBoard);
-          AppPreference.clearBaseOnKey("anonymous");
-        }
+        AppPrefService.setUserUid(userToken: value.uid);
+        AppPrefService.setEmail(userEmail: value.email ?? '');
+        AppPrefService.setName(userName: value.displayName ?? '');
+        AppPrefService.setProfilePhoto(
+            userProfilePhoto: value.photoURL ?? '');
+        await AuthSessionService.syncCurrentUserToPrefs();
+        _openDashboardAfterSignIn();
+        AppPreference.clearBaseOnKey("anonymous");
       } else {
         UserModel userModel = UserModel(
-          email: value?.email ?? "",
-          profilePhoto: value?.photoURL ?? "",
-          firstName: value?.displayName?.split(" ").first ?? "",
-          lastName: value?.displayName?.split(" ").last ?? "",
+          email: value.email ?? "",
+          profilePhoto: value.photoURL ?? "",
+          firstName: value.displayName?.split(" ").first ?? "",
+          lastName: value.displayName?.split(" ").last ?? "",
         );
         await GoogleSignInAuth.createUser(
-            uid: value?.uid ?? '', userModel: userModel);
-        await AppPrefService.setUserUid(userToken: (value?.uid ?? ''));
+            uid: value.uid, userModel: userModel);
+        await AppPrefService.setUserUid(userToken: value.uid);
         await HomeScreenService.getUserData();
-        Navigation.replaceAll(Routes.dashBoard);
+        await AuthSessionService.syncCurrentUserToPrefs();
+        _openDashboardAfterSignIn();
         AppPreference.clearBaseOnKey("anonymous");
       }
       isLoading.value = false;
@@ -78,11 +70,6 @@ class SignInController extends GetxController {
       print("signIn error $e $st");
       isLoading.value = false;
     } finally {
-      if (FirebaseAuth.instance.currentUser != null) {
-        await googleSignIn.signOut();
-        await FirebaseAuth.instance.signOut();
-      }
-
       if (isLoading.value) isLoading.value = false;
     }
   }
@@ -123,35 +110,39 @@ class SignInController extends GetxController {
     try {
       isAppleLoading.value = true;
       var value = await AppleSignInAuth.signInWithApple();
+      if (value == null) {
+        isAppleLoading.value = false;
+        return;
+      }
       DocumentSnapshot documentSnapshot = await FirebaseFirestore.instance
           .collection("users")
-          .doc(value?.uid)
+          .doc(value.uid)
           .get();
       if (!documentSnapshot.exists) {
-        if (value != null) {
-          AppPrefService.setUserUid(userToken: (value.uid));
-          AppPrefService.setEmail(userEmail: (value.email ?? ''));
-          AppPrefService.setName(userName: (value.displayName ?? ''));
-          AppPrefService.setProfilePhoto(
-              userProfilePhoto: (value.photoURL ?? ''));
-          try {
-            UserModel userModel = UserModel(
-              email: value.email,
-              profilePhoto: value.photoURL,
-              firstName: value.displayName?.split(" ").first,
-              lastName: value.displayName?.split(" ").last,
-            );
-            await GoogleSignInAuth.createUser(
-                uid: value.uid, userModel: userModel);
-          } catch (e) {
-            print("GoogleSignInAuth : createUser :: error : $e");
-          }
-          Navigation.replaceAll(Routes.dashBoard);
+        AppPrefService.setUserUid(userToken: value.uid);
+        AppPrefService.setEmail(userEmail: value.email ?? '');
+        AppPrefService.setName(userName: value.displayName ?? '');
+        AppPrefService.setProfilePhoto(
+            userProfilePhoto: value.photoURL ?? '');
+        try {
+          UserModel userModel = UserModel(
+            email: value.email,
+            profilePhoto: value.photoURL,
+            firstName: value.displayName?.split(" ").first,
+            lastName: value.displayName?.split(" ").last,
+          );
+          await GoogleSignInAuth.createUser(
+              uid: value.uid, userModel: userModel);
+        } catch (e) {
+          print("GoogleSignInAuth : createUser :: error : $e");
         }
+        await AuthSessionService.syncCurrentUserToPrefs();
+        _openDashboardAfterSignIn();
       } else {
-        await AppPrefService.setUserUid(userToken: (value?.uid ?? ''));
+        await AppPrefService.setUserUid(userToken: value.uid);
         await HomeScreenService.getUserData();
-        Navigation.replaceAll(Routes.dashBoard);
+        await AuthSessionService.syncCurrentUserToPrefs();
+        _openDashboardAfterSignIn();
       }
       isAppleLoading.value = false;
     } catch (e, st) {
@@ -165,5 +156,17 @@ class SignInController extends GetxController {
   void handleButtonDisable() {
     isDisable.value = (controller.text == "" || controller.text.isEmpty) ||
         (passwordController.text == "" || passwordController.text.isEmpty);
+  }
+
+  void _openDashboardAfterSignIn() {
+    final Object? arguments = Get.arguments;
+    final int returnTab = arguments is Map && arguments['returnTab'] is int
+        ? arguments['returnTab'] as int
+        : 0;
+
+    Navigation.replaceAll(
+      Routes.dashBoard,
+      arg: {'initialIndex': returnTab},
+    );
   }
 }

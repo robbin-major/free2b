@@ -1,7 +1,7 @@
 import 'package:flutter_template/modules/dashboard/bookmark/service/book_mark_service.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
-import 'package:flutter_template/utils/common_service/app_pref_service.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/constants.dart';
 import 'package:get/get.dart';
 
@@ -16,7 +16,8 @@ class BookMarkController extends GetxController {
       if (Constants.isBookmarkLoading.value) {
         isBookMarkLoading.value = true;
       }
-      final String userID = AppPrefService.getUserUid();
+      await AuthSessionService.syncCurrentUserToPrefs();
+      final String userID = AuthSessionService.userId;
       await HomeScreenService.getUserData();
       print("userID 00 ${userID}");
       if (userID.isNotEmpty) {

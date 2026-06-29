@@ -27,9 +27,8 @@ class AppPreference {
     return;
   }
 
-  static  containsBaseOnKey(key) {
-    _prefs.containsKey(key);
-    return;
+  static bool containsBaseOnKey(key) {
+    return _prefs.containsKey(key);
   }
 
   static Future setString(String key, String value) async {
@@ -81,7 +80,16 @@ class AppPreference {
   }
 
   static UserModel? getUser() {
-    return UserModel.fromJson(jsonDecode(_prefs.get(Constants.keyUser) as String? ?? ""));
+    final String? userJson = _prefs.getString(Constants.keyUser);
+    if (userJson == null || userJson.isEmpty) {
+      return null;
+    }
+
+    try {
+      return UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+    } catch (error) {
+      return null;
+    }
   }
 
   static bool isUserLogin() {

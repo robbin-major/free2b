@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
@@ -56,37 +57,27 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> navigateFurther(BuildContext context) async {
-    print("language ${AppPreference.containsBaseOnKey("languageIndex")}");
-    print(AppPreference.getInt("languageIndex"));
-    print(AppPrefService.getUserUid());
-    print("check null :: ${AppPreference.getInt("languageIndex") != null}");
-    AppPreference.getInt("languageIndex") == null
-        ? {
-            Navigation.replaceAll(Routes.languageSetting),
-          }
-        : {
-            AppPreference.getInt("languageIndex") == 0
-                ? Utils.updateLanguage(const Locale('en', 'US'))
-                : Utils.updateLanguage(const Locale('es', 'ES')),
-            if (AppPrefService.getUserUid().isNotEmpty)
-              {
-                Navigation.replaceAll(Routes.dashBoard),
-              }
-            else if (AppPrefService.getUserUid().isEmpty)
-              {
-                if (AppPrefService.getAnonymous().isEmpty)
-                  {
-                    print("ANONYMOUS"),
-                    Navigation.replaceAll(Routes.getStarted),
-                  }
-                else if (AppPrefService.getAnonymous().isNotEmpty)
-                  {
-                    print(":::::::::: SKIP ANONYMOUS ::::::::::"),
-                    Navigation.replaceAll(Routes.dashBoard),
-                    print(":::::::::: SKIP ANONYMOUS ::::::::::"),
-                  },
-                AppPrefService.setAnonymous(userToken: 'ANONYMOUS'),
-              }
-          };
+    final int? languageIndex = AppPreference.getInt("languageIndex");
+    if (languageIndex == null) {
+      Navigation.replaceAll(Routes.languageSetting);
+      return;
+    }
+
+    languageIndex == 0
+        ? Utils.updateLanguage(const Locale('en', 'US'))
+        : Utils.updateLanguage(const Locale('es', 'ES'));
+
+    if (AuthSessionService.isSignedIn) {
+      await AuthSessionService.syncCurrentUserToPrefs();
+      Navigation.replaceAll(Routes.dashBoard);
+      return;
+    }
+
+    if (AppPrefService.getAnonymous().isNotEmpty) {
+      Navigation.replaceAll(Routes.dashBoard);
+      return;
+    }
+
+    Navigation.replaceAll(Routes.getStarted);
   }
 }

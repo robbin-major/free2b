@@ -22,7 +22,7 @@ class CalenderScreen extends StatefulWidget {
 class _CalenderScreenState extends State<CalenderScreen> {
   final CalenderController _calenderController = Get.put(CalenderController());
   static const EdgeInsets _calendarPadding =
-      EdgeInsets.fromLTRB(16, 16, 16, 18);
+      EdgeInsets.fromLTRB(16, 12, 16, 12);
   static const double _calendarHeaderHeight = 58.0;
   static const double _weekdayHeaderHeight = 34.0;
   static const double _monthCellMinHeight = 48.0;
@@ -30,6 +30,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
   static const double _monthGridVerticalPadding = 10.0;
   static const double _monthLegendHeight = 34.0;
   static const double _monthCardVerticalInset = 12.0;
+  static const double _agendaPeekHeight = 126.0;
   static const Color _mutedGold = Color(0xFFD6B75A);
   static const int _initialMonthPage = 500;
   late PageController _monthPageController;
@@ -75,7 +76,9 @@ class _CalenderScreenState extends State<CalenderScreen> {
                       _weeksInMonthView(_displayedMonth);
                   final double availableBodyHeight = max(
                     0.0,
-                    constraints.maxHeight - _calendarPadding.vertical,
+                    constraints.maxHeight -
+                        _calendarPadding.vertical -
+                        _agendaPeekHeight,
                   );
                   final double fixedCardHeight = _calendarHeaderHeight +
                       _weekdayHeaderHeight +
@@ -98,89 +101,111 @@ class _CalenderScreenState extends State<CalenderScreen> {
                       _monthLegendHeight +
                       _monthCardVerticalInset;
 
-                  return Padding(
-                    padding: _calendarPadding,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        height: min(contentHeight, availableBodyHeight),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF1A1A1A),
-                              Color(0xFF111111),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: const Color(0xFF4A4A4A).withOpacity(0.42),
-                            width: 1.0,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.32),
-                              blurRadius: 28,
-                              offset: const Offset(0, 18),
+                  return Stack(
+                    children: [
+                      Padding(
+                        padding: _calendarPadding,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: Container(
+                            height: min(contentHeight, availableBodyHeight),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFF1A1A1A),
+                                  Color(0xFF111111),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color:
+                                    const Color(0xFF4A4A4A).withOpacity(0.42),
+                                width: 1.0,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.32),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 18),
+                                ),
+                                BoxShadow(
+                                  color: const Color(0xFFD4AF37)
+                                      .withOpacity(0.04),
+                                  blurRadius: 42,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
                             ),
-                            BoxShadow(
-                              color: const Color(0xFFD4AF37).withOpacity(0.04),
-                              blurRadius: 42,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              height: _calendarHeaderHeight,
-                              child: Center(
-                                child: Text(
-                                  DateFormat('MMMM yyyy')
-                                      .format(_displayedMonth),
-                                  style: TextStyle(
-                                    fontSize: 23,
-                                    fontWeight: FontWeight.w800,
-                                    foreground: Paint()
-                                      ..shader = const LinearGradient(
-                                        colors: [
-                                          Color(0xFFF6E27F),
-                                          Color(0xFFD4AF37),
-                                        ],
-                                      ).createShader(
-                                        const Rect.fromLTWH(0, 0, 220, 70),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  height: _calendarHeaderHeight,
+                                  child: Center(
+                                    child: Text(
+                                      DateFormat('MMMM yyyy')
+                                          .format(_displayedMonth),
+                                      style: TextStyle(
+                                        fontSize: 23,
+                                        fontWeight: FontWeight.w800,
+                                        foreground: Paint()
+                                          ..shader = const LinearGradient(
+                                            colors: [
+                                              Color(0xFFF6E27F),
+                                              Color(0xFFD4AF37),
+                                            ],
+                                          ).createShader(
+                                            const Rect.fromLTWH(0, 0, 220, 70),
+                                          ),
                                       ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            _buildWeekdayHeader(),
-                            SizedBox(
-                              height:
-                                  (targetCellHeight * weeksInDisplayedMonth) +
-                                      _monthGridVerticalPadding,
-                              child: PageView.builder(
-                                controller: _monthPageController,
-                                onPageChanged: _handleMonthPageChanged,
-                                itemBuilder: (context, index) {
-                                  final DateTime month = _monthForPage(index);
+                                _buildWeekdayHeader(),
+                                SizedBox(
+                                  height:
+                                      (targetCellHeight * weeksInDisplayedMonth) +
+                                          _monthGridVerticalPadding,
+                                  child: PageView.builder(
+                                    controller: _monthPageController,
+                                    onPageChanged: _handleMonthPageChanged,
+                                    itemBuilder: (context, index) {
+                                      final DateTime month = _monthForPage(index);
 
-                                  return _buildMonthGrid(
-                                    month: month,
-                                    cellHeight: targetCellHeight,
-                                  );
-                                },
-                              ),
+                                      return _buildMonthGrid(
+                                        month: month,
+                                        cellHeight: targetCellHeight,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                _buildEventLegend(),
+                                const SizedBox(height: _monthCardVerticalInset),
+                              ],
                             ),
-                            _buildEventLegend(),
-                            const SizedBox(height: _monthCardVerticalInset),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      DraggableScrollableSheet(
+                        initialChildSize: 0.22,
+                        minChildSize: 0.16,
+                        maxChildSize: 0.74,
+                        snap: true,
+                        snapSizes: const [0.22, 0.52, 0.74],
+                        builder: (context, scrollController) {
+                          return _buildEventSheetContent(
+                            selectedDate: _selectedDate,
+                            selectedEvents: _agendaEventsForSelectedDate(),
+                            scrollController: scrollController,
+                            onPreviousDay: () => _moveSelectedDay(-1),
+                            onNextDay: () => _moveSelectedDay(1),
+                          );
+                        },
+                      ),
+                    ],
                   );
                 },
               ),
@@ -208,6 +233,25 @@ class _CalenderScreenState extends State<CalenderScreen> {
           DateTime(newDisplayedMonth.year, newDisplayedMonth.month);
       _selectedDate = _displayedMonth;
     });
+  }
+
+  void _moveSelectedDay(int dayOffset) {
+    final DateTime nextDate = _selectedDate.add(Duration(days: dayOffset));
+    final DateTime nextMonth = DateTime(nextDate.year, nextDate.month);
+    setState(() {
+      _selectedDate = nextDate;
+      _displayedMonth = nextMonth;
+      _calenderController.currentDate = nextDate;
+      _calenderController.calendarController.selectedDate = nextDate;
+      _calenderController.calendarController.displayDate = nextDate;
+    });
+    if (_monthPageController.hasClients) {
+      final int targetPage = _initialMonthPage +
+          ((nextMonth.year - _baseMonth.year) * 12) +
+          nextMonth.month -
+          _baseMonth.month;
+      _monthPageController.jumpToPage(targetPage);
+    }
   }
 
   Widget _buildWeekdayHeader() {
@@ -298,9 +342,6 @@ class _CalenderScreenState extends State<CalenderScreen> {
         setState(() {
           _selectedDate = date;
         });
-        if (hasEvents) {
-          _showEventSheet(context, date);
-        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -387,6 +428,32 @@ class _CalenderScreenState extends State<CalenderScreen> {
       });
   }
 
+  List<EventModel> _agendaEventsForSelectedDate() {
+    final List<EventModel> selectedDayEvents =
+        _sortedEventsForDay(_selectedDate);
+    if (selectedDayEvents.isNotEmpty) {
+      return selectedDayEvents;
+    }
+
+    return _calenderController.eventData.where((event) {
+      final DateTime? eventDate = _eventDate(event);
+      return eventDate != null &&
+          eventDate.year == _displayedMonth.year &&
+          eventDate.month == _displayedMonth.month &&
+          !EventDateUtils.hasEventEnded(eventDate);
+    }).toList()
+      ..sort((a, b) {
+        final DateTime? aDate = _eventDate(a);
+        final DateTime? bDate = _eventDate(b);
+
+        if (aDate == null || bDate == null) {
+          return 0;
+        }
+
+        return aDate.compareTo(bDate);
+      });
+  }
+
   DateTime? _eventDate(EventModel event) {
     return EventDateUtils.parseEventDateTime(event.startDate);
   }
@@ -397,57 +464,6 @@ class _CalenderScreenState extends State<CalenderScreen> {
         .isBefore(DateTime(today.year, today.month, today.day));
   }
 
-  Future<void> _showEventSheet(
-    BuildContext context,
-    DateTime selectedDate,
-  ) async {
-    DateTime sheetSelectedDate = selectedDate;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, sheetSetState) {
-            void moveDay(int dayOffset) {
-              final DateTime nextDate =
-                  sheetSelectedDate.add(Duration(days: dayOffset));
-
-              setState(() {
-                _selectedDate = nextDate;
-                _calenderController.currentDate = nextDate;
-                _calenderController.calendarController.selectedDate = nextDate;
-                _calenderController.calendarController.displayDate = nextDate;
-              });
-
-              sheetSetState(() {
-                sheetSelectedDate = nextDate;
-              });
-            }
-
-            return DraggableScrollableSheet(
-              initialChildSize: 0.88,
-              minChildSize: 0.45,
-              maxChildSize: 0.96,
-              expand: false,
-              builder: (context, scrollController) {
-                return _buildEventSheetContent(
-                  selectedDate: sheetSelectedDate,
-                  selectedEvents: _sortedEventsForDay(sheetSelectedDate),
-                  scrollController: scrollController,
-                  onPreviousDay: () => moveDay(-1),
-                  onNextDay: () => moveDay(1),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildEventSheetContent({
     required DateTime selectedDate,
     required List<EventModel> selectedEvents,
@@ -455,8 +471,12 @@ class _CalenderScreenState extends State<CalenderScreen> {
     required VoidCallback onPreviousDay,
     required VoidCallback onNextDay,
   }) {
+    final bool showingMonthEvents =
+        _eventsForDay(selectedDate).isEmpty && selectedEvents.isNotEmpty;
     final String eventCount =
-        '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
+        showingMonthEvents
+            ? '${selectedEvents.length} upcoming this month'
+            : '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
 
     return Container(
       decoration: const BoxDecoration(
@@ -488,7 +508,9 @@ class _CalenderScreenState extends State<CalenderScreen> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        DateFormat('EEEE, MMMM d').format(selectedDate),
+                        showingMonthEvents
+                            ? DateFormat('MMMM yyyy').format(_displayedMonth)
+                            : DateFormat('EEEE, MMMM d').format(selectedDate),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
