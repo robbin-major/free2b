@@ -12,6 +12,7 @@ import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/utils/social_authentication/apple_auth.dart';
 import 'package:flutter_template/utils/social_authentication/google_auth.dart';
+import 'package:flutter_template/widget/app_snackbar.dart';
 import 'package:get/get.dart';
 
 import '../../../utils/app_preferences.dart';
@@ -35,6 +36,11 @@ class SignInController extends GetxController {
         print(
           'Google sign-in did not complete. Check logcat for '
           'GoogleSignInAuth PlatformException/FirebaseAuthException details.',
+        );
+        AppSnackBar.showErrorSnackBar(
+          message: GoogleSignInAuth.lastErrorMessage ??
+              'Google sign-in could not start. Please try again.',
+          title: 'Error',
         );
         isLoading.value = false;
         return;

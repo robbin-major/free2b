@@ -3,7 +3,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
-import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/utils/size_utils.dart';
@@ -69,11 +68,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (AuthSessionService.isSignedIn) {
       await AuthSessionService.syncCurrentUserToPrefs();
-      Navigation.replaceAll(Routes.dashBoard);
-      return;
-    }
-
-    if (AppPrefService.getAnonymous().isNotEmpty) {
       Navigation.replaceAll(Routes.dashBoard);
       return;
     }

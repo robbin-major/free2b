@@ -43,8 +43,6 @@ class DashBoard extends StatelessWidget {
             unselectedLabelStyle: TextStyle(fontSize: 12.sp),
             showSelectedLabels: true,
             onTap: (value) async {
-              final bool wasCalendarSelected =
-                  _dashBoardController.currentIndex.value == 1;
               if (!_dashBoardController.canOpenIndex(value)) {
                 await Navigation.pushNamed(
                   Routes.getStarted,
@@ -55,9 +53,6 @@ class DashBoard extends StatelessWidget {
               _dashBoardController.onPageChanged(value);
               if (value == 1) {
                 print(value);
-                if (wasCalendarSelected) {
-                  calenderController.collapseAgenda();
-                }
                 await calenderController.doGetEventData();
               }
               if (value == 2) {
