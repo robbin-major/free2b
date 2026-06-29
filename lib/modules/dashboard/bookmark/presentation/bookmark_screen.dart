@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/modules/dashboard/bookmark/controller/book_mark_controller.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
@@ -14,7 +15,6 @@ import 'package:flutter_template/widget/custom_loading_widget.dart';
 import 'package:flutter_template/widget/event_image.dart';
 import 'package:get/get.dart';
 
-import '../../../../utils/common_service/app_pref_service.dart';
 import '../../../get_started/presentation/get_started_screen.dart';
 
 class BookMarkScreen extends StatelessWidget {
@@ -24,7 +24,7 @@ class BookMarkScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppPrefService.getUserUid().isNotEmpty
+    return AuthSessionService.isSignedIn
         ? Scaffold(
             backgroundColor: AppColors.backgroundColor,
             appBar: CustomAppBar(

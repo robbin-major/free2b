@@ -11,6 +11,8 @@ import 'package:flutter_template/modules/dashboard/profile/controller/profile_co
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
+import 'package:flutter_template/utils/navigation_utils/navigation.dart';
+import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:get/get.dart';
 
 import '../../../../utils/enum/common_enums.dart';
@@ -41,6 +43,13 @@ class DashBoard extends StatelessWidget {
             unselectedLabelStyle: TextStyle(fontSize: 12.sp),
             showSelectedLabels: true,
             onTap: (value) async {
+              if (!_dashBoardController.canOpenIndex(value)) {
+                await Navigation.pushNamed(
+                  Routes.getStarted,
+                  arg: {'returnTab': value},
+                );
+                return;
+              }
               _dashBoardController.onPageChanged(value);
               if (value == 1) {
                 print(value);
@@ -91,7 +100,12 @@ class DashBoard extends StatelessWidget {
           onWillPop: () {
             return _dashBoardController.onWillPop();
           },
-          child: Obx(() => IndexedStack(children: [_dashBoardController.screen[_dashBoardController.currentIndex.value]]))),
+          child: Obx(
+            () => IndexedStack(
+              index: _dashBoardController.currentIndex.value,
+              children: _dashBoardController.screen,
+            ),
+          )),
     );
   }
 }

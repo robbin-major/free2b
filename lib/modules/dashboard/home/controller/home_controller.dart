@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
+import 'package:flutter_template/utils/location_service.dart';
 import 'package:flutter_template/utils/utils.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
@@ -12,7 +14,9 @@ class HomeController extends GetxController {
   RxList<EventModel> filterEventData = <EventModel>[].obs;
   RxList<EventModel> searchEventData = <EventModel>[].obs;
   RxBool isEventLoading = false.obs;
+  RxBool isLocationLoading = false.obs;
   RxBool isSearch = false.obs;
+  RxString locationLabel = ''.obs;
   Timer? _debounce;
   TextEditingController textEditingController = TextEditingController();
   RxList<String> categoryList = <String>[].obs;
@@ -91,5 +95,44 @@ class HomeController extends GetxController {
     } else {
       isSearch.value = false;
     }
+  }
+
+  Future<void> useCurrentLocation() async {
+    try {
+      isLocationLoading.value = true;
+      final Placemark? placemark =
+          await AppLocationService.getCurrentPlacemarkIfAllowed();
+
+      if (placemark == null) {
+        locationLabel.value = '';
+        filterEventData.value = eventData;
+        return;
+      }
+
+      final String city = (placemark.locality ?? placemark.subAdministrativeArea ?? '').trim();
+      final String state = (placemark.administrativeArea ?? '').trim();
+      locationLabel.value = city.isNotEmpty ? city : state;
+
+      final List<EventModel> nearbyEvents = eventData.where((event) {
+        final String eventCity = (event.city ?? '').toLowerCase();
+        final String eventState = (event.state ?? '').toLowerCase();
+
+        return (city.isNotEmpty && eventCity.contains(city.toLowerCase())) ||
+            (state.isNotEmpty && eventState.contains(state.toLowerCase()));
+      }).toList();
+
+      filterEventData.value =
+          nearbyEvents.isNotEmpty ? nearbyEvents : eventData;
+    } catch (error) {
+      print('Use current location failed: $error');
+      filterEventData.value = eventData;
+    } finally {
+      isLocationLoading.value = false;
+    }
+  }
+
+  void clearLocationFilter() {
+    locationLabel.value = '';
+    filterEventData.value = eventData;
   }
 }

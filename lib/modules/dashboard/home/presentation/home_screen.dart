@@ -91,6 +91,46 @@ class HomeScreen extends StatelessWidget {
             },
           ),
           Obx(() {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _homeController.isLocationLoading.value
+                    ? null
+                    : () async {
+                        if (_homeController.locationLabel.value.isEmpty) {
+                          await _homeController.useCurrentLocation();
+                        } else {
+                          _homeController.clearLocationFilter();
+                        }
+                      },
+                icon: _homeController.isLocationLoading.value
+                    ? SizedBox(
+                        width: 16.w,
+                        height: 16.w,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.yellowButtonColor,
+                        ),
+                      )
+                    : Icon(
+                        _homeController.locationLabel.value.isEmpty
+                            ? Icons.my_location
+                            : Icons.close,
+                        size: 18.sp,
+                        color: AppColors.yellowButtonColor,
+                      ),
+                label: CommonText(
+                  text: _homeController.locationLabel.value.isEmpty
+                      ? 'Use my location'
+                      : 'Near ${_homeController.locationLabel.value}',
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.yellowButtonColor,
+                ),
+              ),
+            ).paddingOnly(left: 8.w, right: 16.w, bottom: 4.h);
+          }),
+          Obx(() {
             final showCategoryGrid = _homeController.isSearch.value &&
                 _homeController.textEditingController.text.isNotEmpty &&
                 _homeController.categoryList.isNotEmpty;
@@ -184,7 +224,7 @@ class HomeScreen extends StatelessWidget {
               () => _homeController.isEventLoading.value
                   ? const CustomLoadingWidget()
                   : (!_homeController.isSearch.value
-                          ? (_homeController.eventData.isEmpty)
+                          ? (_homeController.filterEventData.isEmpty)
                           : (_homeController.searchEventData.isEmpty))
                       ? Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -208,11 +248,11 @@ class HomeScreen extends StatelessWidget {
                           child: ListView.builder(
                             itemCount: _homeController.isSearch.value
                                 ? _homeController.searchEventData.length
-                                : _homeController.eventData.length,
+                                : _homeController.filterEventData.length,
                             itemBuilder: (context, index) {
                               var data = _homeController.isSearch.value
                                   ? _homeController.searchEventData[index]
-                                  : _homeController.eventData[index];
+                                  : _homeController.filterEventData[index];
                               timeDilation = 1.0;
                               return GestureDetector(
                                 onTap: () async {

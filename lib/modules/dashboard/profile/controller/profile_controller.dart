@@ -15,6 +15,7 @@ import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/enum/common_enums.dart';
 import 'package:get/get.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../../utils/remove_data/remove_data_service.dart';
 
@@ -82,6 +83,7 @@ class ProfileController extends GetxController {
   Future<bool> signOutFromGoogle() async {
     isLogOutLoading.value = true;
     try {
+      await GoogleSignIn().signOut();
       await FirebaseAuth.instance.signOut();
       return true;
     } on Exception catch (_) {

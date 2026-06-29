@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter_template/modules/authentication/model/user_model.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/enum/common_enums.dart';
 import 'package:flutter_template/utils/utils.dart';
@@ -15,7 +16,7 @@ import 'model/category_model.dart';
 class HomeScreenService {
   static Future<List<EventModel>> getEventData() async {
     try {
-      final String userID = AppPrefService.getUserUid();
+      final String userID = AuthSessionService.userId;
       final List<EventModel> eventList = <EventModel>[];
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('event');
       QuerySnapshot querySnapshot =
@@ -50,7 +51,7 @@ class HomeScreenService {
 
   static Future<List<EventModel>> getMyEventData({required EventStatus eventStatus}) async {
     try {
-      final String userID = AppPrefService.getUserUid();
+      final String userID = AuthSessionService.userId;
       final List<EventModel> eventList = <EventModel>[];
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('event');
       QuerySnapshot querySnapshot = await collectionRef.where("status", isEqualTo: eventStatus.eventType).where("uid", isEqualTo: userID).get();
@@ -87,11 +88,15 @@ class HomeScreenService {
 
   static Future<UserModel?> getUserData() async {
     try {
-      final String userID = AppPrefService.getUserUid();
+      final String userID = AuthSessionService.userId;
       if (userID.isNotEmpty) {
         CollectionReference collectionRef = FirebaseFirestore.instance.collection('users');
         final userData = await collectionRef.doc(userID).get();
-        final UserModel userModel = UserModel.fromJson(userData.data() as Map<String, dynamic>);
+        final Object? data = userData.data();
+        if (data is! Map<String, dynamic>) {
+          return AppPreference.getUser();
+        }
+        final UserModel userModel = UserModel.fromJson(data);
         AppPrefService.setEmail(userEmail: (userModel.email ?? ''));
         AppPrefService.setName(userName: "${(userModel.firstName ?? '')} ${(userModel.lastName ?? '')}");
         AppPrefService.setProfilePhoto(userProfilePhoto: (userModel.profilePhoto ?? ''));
@@ -107,7 +112,7 @@ class HomeScreenService {
 
   static Future<void> eventBookmark({required List<String> bookmarkList}) async {
     try {
-      final String userID = AppPrefService.getUserUid();
+      final String userID = AuthSessionService.userId;
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('users');
       await collectionRef.doc(userID).update({"bookmark": bookmarkList});
     } catch (error) {

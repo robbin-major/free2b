@@ -7,6 +7,7 @@ import 'package:flutter_template/modules/dashboard/profile/controller/profile_co
 import 'package:flutter_template/modules/get_started/presentation/get_started_screen.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/enum/common_enums.dart';
@@ -45,7 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    return AppPrefService.getUserUid().isNotEmpty
+    return AuthSessionService.isSignedIn
         ? Scaffold(
             floatingActionButton: Obx(
               () {
