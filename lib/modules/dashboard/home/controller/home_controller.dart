@@ -115,31 +115,59 @@ class HomeController extends GetxController {
       }
 
       final Placemark? placemark = result.placemark;
+      final String zipCode = _normalizeZipCode(placemark?.postalCode);
       final String neighborhood = (placemark?.subLocality ?? '').trim();
       final String city =
           (placemark?.locality ?? placemark?.subAdministrativeArea ?? '')
               .trim();
       final String state = (placemark?.administrativeArea ?? '').trim();
-      locationLabel.value = neighborhood.isNotEmpty
-          ? neighborhood
-          : city.isNotEmpty
-              ? city
-              : state.isNotEmpty
-                  ? state
-                  : 'you';
 
-      final List<EventModel> nearbyEvents = eventData.where((event) {
-        final String eventCity = (event.city ?? '').toLowerCase();
-        final String eventState = (event.state ?? '').toLowerCase();
+      List<EventModel> nearbyEvents = [];
+      String matchType = 'coordinates_only';
 
-        return (city.isNotEmpty && eventCity.contains(city.toLowerCase())) ||
-            (state.isNotEmpty && eventState.contains(state.toLowerCase()));
-      }).toList();
+      if (zipCode.isNotEmpty) {
+        nearbyEvents = eventData.where((event) {
+          return _normalizeZipCode(event.zipCode) == zipCode;
+        }).toList();
+        matchType = 'zip_exact';
 
+        if (nearbyEvents.isEmpty) {
+          nearbyEvents = eventData.where((event) {
+            return _isNearbyZipCode(
+              userZipCode: zipCode,
+              eventZipCode: _normalizeZipCode(event.zipCode),
+            );
+          }).toList();
+          matchType = 'zip_nearby';
+        }
+      }
+
+      if (nearbyEvents.isEmpty && (city.isNotEmpty || state.isNotEmpty)) {
+        nearbyEvents = eventData.where((event) {
+          final String eventCity = (event.city ?? '').toLowerCase();
+          final String eventState = (event.state ?? '').toLowerCase();
+
+          return (city.isNotEmpty && eventCity.contains(city.toLowerCase())) ||
+              (state.isNotEmpty && eventState.contains(state.toLowerCase()));
+        }).toList();
+        matchType = 'city_state_fallback';
+      }
+
+      locationLabel.value = zipCode.isNotEmpty
+          ? zipCode
+          : neighborhood.isNotEmpty
+              ? neighborhood
+              : city.isNotEmpty
+                  ? city
+                  : state.isNotEmpty
+                      ? state
+                      : 'you';
       filterEventData.value =
           nearbyEvents.isNotEmpty ? nearbyEvents : eventData;
       print(
-        'Use current location applied: label=${locationLabel.value}, '
+        'Use current location applied: '
+        'lat=${result.position?.latitude}, lng=${result.position?.longitude}, '
+        'zip=$zipCode, label=${locationLabel.value}, matchType=$matchType, '
         'matchedEvents=${nearbyEvents.length}',
       );
     } catch (error) {
@@ -154,5 +182,21 @@ class HomeController extends GetxController {
     locationLabel.value = '';
     locationStatus.value = '';
     filterEventData.value = eventData;
+  }
+
+  String _normalizeZipCode(String? value) {
+    final String digitsOnly = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    return digitsOnly.length >= 5 ? digitsOnly.substring(0, 5) : digitsOnly;
+  }
+
+  bool _isNearbyZipCode({
+    required String userZipCode,
+    required String eventZipCode,
+  }) {
+    if (userZipCode.length < 3 || eventZipCode.length < 3) {
+      return false;
+    }
+
+    return eventZipCode.substring(0, 3) == userZipCode.substring(0, 3);
   }
 }

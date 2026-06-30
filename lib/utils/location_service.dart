@@ -97,8 +97,8 @@ class AppLocationService {
             placemarks.isNotEmpty ? placemarks.first : null;
         print(
           'Location placemark: '
-          '${placemark?.subLocality}, ${placemark?.locality}, '
-          '${placemark?.administrativeArea}',
+          '${placemark?.postalCode}, ${placemark?.subLocality}, '
+          '${placemark?.locality}, ${placemark?.administrativeArea}',
         );
         return AppLocationLookupResult(
           status: 'success',

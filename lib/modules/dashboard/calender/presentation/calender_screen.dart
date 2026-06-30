@@ -37,6 +37,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
   late DateTime _baseMonth;
   late DateTime _displayedMonth;
   late DateTime _selectedDate;
+  bool _isEventSheetOpen = false;
 
   @override
   void initState() {
@@ -46,10 +47,14 @@ class _CalenderScreenState extends State<CalenderScreen> {
     _displayedMonth = _baseMonth;
     _selectedDate = DateTime(now.year, now.month, now.day);
     _monthPageController = PageController(initialPage: _initialMonthPage);
+    _calenderController.closeEventSheet = _closeEventSheet;
   }
 
   @override
   void dispose() {
+    if (_calenderController.closeEventSheet == _closeEventSheet) {
+      _calenderController.closeEventSheet = null;
+    }
     _monthPageController.dispose();
     super.dispose();
   }
@@ -403,6 +408,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final List<EventModel> selectedEvents = _sortedEventsForDay(date);
     final double initialSize = selectedEvents.length > 1 ? 0.58 : 0.42;
 
+    _isEventSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -423,7 +429,15 @@ class _CalenderScreenState extends State<CalenderScreen> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      _isEventSheetOpen = false;
+    });
+  }
+
+  void _closeEventSheet() {
+    if (_isEventSheetOpen && mounted) {
+      Navigator.of(context).maybePop();
+    }
   }
 
   Widget _buildEventSheetContent({
