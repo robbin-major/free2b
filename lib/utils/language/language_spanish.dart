@@ -75,6 +75,13 @@ Map<String, String> sp = {
   AppString.close: "Cerca",
   AppString.selectYourCategory: "Seleccione su categoría",
   AppString.noAnEvent: "Esta fecha no es un evento.",
+  AppString.eventEnded: "Event ended",
+  AppString.eventHasPassed: "This event has passed",
+  AppString.addToCalendar: "Add to Calendar",
+  AppString.imAttending: "I'm Attending",
+  AppString.attending: "Attending",
+  AppString.calendarIntegrationComingSoon:
+      "Device calendar support is coming soon. This does not mark you as attending.",
   AppString.login: "Acceso",
   AppString.searchHere: "Busca aquí...",
   AppString.continueText: "Continuar",

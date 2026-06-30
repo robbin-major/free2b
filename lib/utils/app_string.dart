@@ -86,6 +86,11 @@ class AppString {
   static const String noAnEvent = 'This date is not an event.';
   static const String eventEnded = 'Event ended';
   static const String eventHasPassed = 'This event has passed';
+  static const String addToCalendar = 'Add to Calendar';
+  static const String imAttending = "I'm Attending";
+  static const String attending = 'Attending';
+  static const String calendarIntegrationComingSoon =
+      'Device calendar support is coming soon. This does not mark you as attending.';
   static const String login = 'LogIn';
   static const String searchHere = 'Search here...';
   static const String continueText = 'Continue';

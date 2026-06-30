@@ -10,7 +10,6 @@ import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
-import 'package:flutter_template/utils/enum/common_enums.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/utils/utils.dart';
@@ -650,9 +649,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: EdgeInsets.zero,
       onTap: (value) async {
         if (value == 0) {
-          await _profileController.getEvent(eventStatus: EventStatus.APPROVAL);
+          await _profileController.getAttendanceEvents(attended: false);
         } else if (value == 1) {
-          await _profileController.getEvent(eventStatus: EventStatus.PENDING);
+          await _profileController.getAttendanceEvents(attended: true);
         }
         _profileController.selectedIndex.value = value;
         print(

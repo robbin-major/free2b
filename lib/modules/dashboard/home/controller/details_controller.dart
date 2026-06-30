@@ -18,6 +18,7 @@ class DetailController extends GetxController {
   EventModel eventModel = EventModel();
   Rx<UserModel?> userData = UserModel().obs;
   RxList<String> bookMarkId = <String>[].obs;
+  RxList<String> attendingId = <String>[].obs;
   RxBool isLoading = false.obs;
 
   @override
@@ -36,6 +37,9 @@ class DetailController extends GetxController {
       userData.value = await HomeScreenService.getUserData();
 
       bookMarkId.addAll(userData.value?.bookmark ?? []);
+      attendingId
+        ..clear()
+        ..addAll(userData.value?.attending ?? []);
       print("getUserData bookMarkId ${bookMarkId.length}");
       await AppPreference.setUser(userData.value);
     }
@@ -45,6 +49,18 @@ class DetailController extends GetxController {
     try {
       isLoading.value = true;
       await HomeScreenService.eventBookmark(bookmarkList: bookMarkId);
+      await getUserData();
+      isLoading.value = false;
+    } catch (error) {
+      isLoading.value = false;
+      rethrow;
+    }
+  }
+
+  Future<void> eventAttendance() async {
+    try {
+      isLoading.value = true;
+      await HomeScreenService.eventAttendance(attendingList: attendingId);
       await getUserData();
       isLoading.value = false;
     } catch (error) {

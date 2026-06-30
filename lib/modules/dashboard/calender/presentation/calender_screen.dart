@@ -296,7 +296,10 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final bool isSelected = DateUtils.isSameDay(date, _selectedDate);
     final List<EventModel> eventsForDay = _eventsForDay(date);
     final bool hasEvents = eventsForDay.isNotEmpty;
-    final bool hasActiveEvents = hasEvents && !isPastDate;
+    final bool hasActiveEvents = eventsForDay.any((event) {
+      final DateTime? eventDate = _eventDate(event);
+      return eventDate != null && !EventDateUtils.hasEventEnded(eventDate);
+    });
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),

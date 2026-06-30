@@ -8,6 +8,7 @@ import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/enum/common_enums.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/utils/utils.dart';
 import 'package:intl/intl.dart';
 
@@ -116,6 +117,68 @@ class HomeScreenService {
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('users');
       await collectionRef.doc(userID).update({"bookmark": bookmarkList});
     } catch (error) {
+      rethrow;
+    }
+  }
+
+  static Future<void> eventAttendance({required List<String> attendingList}) async {
+    try {
+      final String userID = AuthSessionService.userId;
+      CollectionReference collectionRef = FirebaseFirestore.instance.collection('users');
+      await collectionRef.doc(userID).update({"attending": attendingList});
+    } catch (error) {
+      rethrow;
+    }
+  }
+
+  static Future<List<EventModel>> getAttendingEvents({required bool attended}) async {
+    try {
+      final UserModel? userModel = await getUserData();
+      final List<String> attendingIds = userModel?.attending ?? [];
+
+      if (attendingIds.isEmpty) {
+        return <EventModel>[];
+      }
+
+      final List<EventModel> eventList = <EventModel>[];
+      CollectionReference collectionRef = FirebaseFirestore.instance.collection('event');
+      QuerySnapshot querySnapshot =
+          await collectionRef.where("status", isEqualTo: EventStatus.APPROVAL.eventType).get();
+
+      for (var element in querySnapshot.docs) {
+        if (attendingIds.contains(element.id)) {
+          final EventModel eventModel =
+              EventModel.fromJson(element.data() as Map<String, dynamic>);
+          eventList.add(eventModel.copyWith(eventID: element.id));
+        }
+      }
+
+      eventList.removeWhere((element) {
+        final DateTime? eventDate =
+            EventDateUtils.parseEventDateTime(element.startDate);
+
+        if (eventDate == null) {
+          return true;
+        }
+
+        final bool eventEnded = EventDateUtils.hasEventEnded(eventDate);
+        return attended ? !eventEnded : eventEnded;
+      });
+
+      eventList.sort((a, b) {
+        final DateTime? aDate = EventDateUtils.parseEventDateTime(a.startDate);
+        final DateTime? bDate = EventDateUtils.parseEventDateTime(b.startDate);
+
+        if (aDate == null || bDate == null) {
+          return 0;
+        }
+
+        return attended ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
+      });
+
+      return eventList;
+    } catch (error, st) {
+      print("GET ATTENDING EVENT ERROR $error --- $st");
       rethrow;
     }
   }

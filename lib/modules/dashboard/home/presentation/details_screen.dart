@@ -175,6 +175,31 @@ class DetailsScreen extends StatelessWidget {
                       ),
                     ],
                   ).paddingOnly(bottom: 6.h),
+                  Wrap(
+                    spacing: 10.w,
+                    runSpacing: 10.h,
+                    children: [
+                      _buildEventAction(
+                        icon: Icons.calendar_month_outlined,
+                        label: AppString.addToCalendar,
+                        onTap: () => _showCalendarIntegrationMessage(context),
+                      ),
+                      Obx(() {
+                        final bool isAttending = _isAttendingEvent();
+
+                        return _buildEventAction(
+                          icon: isAttending
+                              ? Icons.check_circle
+                              : Icons.check_circle_outline,
+                          label: isAttending
+                              ? AppString.attending
+                              : AppString.imAttending,
+                          isSelected: isAttending,
+                          onTap: () => _toggleAttending(context),
+                        );
+                      }),
+                    ],
+                  ).paddingOnly(bottom: 12.h),
                   if (_hasEventEnded(_detailController.eventModel.startDate))
                     Container(
                       padding: EdgeInsets.symmetric(
@@ -247,5 +272,95 @@ class DetailsScreen extends StatelessWidget {
 
     return eventDateTime != null &&
         EventDateUtils.hasEventEnded(eventDateTime);
+  }
+
+  bool _isAttendingEvent() {
+    final String eventId = _detailController.eventModel.eventID ?? '';
+
+    return eventId.isNotEmpty &&
+        (_detailController.userData.value?.attending?.contains(eventId) ??
+            false);
+  }
+
+  Future<void> _toggleAttending(BuildContext context) async {
+    final String userID = AppPrefService.getUserUid();
+    final String eventId = _detailController.eventModel.eventID ?? '';
+
+    if (userID.isEmpty) {
+      userLoginPopup(context);
+      return;
+    }
+
+    if (eventId.isEmpty) {
+      return;
+    }
+
+    final bool isAttending =
+        _detailController.attendingId.any((element) => element == eventId);
+
+    if (isAttending) {
+      _detailController.attendingId.remove(eventId);
+    } else {
+      _detailController.attendingId.add(eventId);
+    }
+
+    await _detailController.eventAttendance();
+  }
+
+  void _showCalendarIntegrationMessage(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          AppString.calendarIntegrationComingSoon,
+        ),
+        backgroundColor: AppColors.backgroundLightColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Widget _buildEventAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isSelected = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999.r),
+        onTap: onTap,
+        child: Ink(
+          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.yellowButtonColor
+                : AppColors.backgroundLightColor,
+            borderRadius: BorderRadius.circular(999.r),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.yellowButtonColor
+                  : AppColors.dividerColor,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? Colors.black : AppColors.yellowButtonColor,
+                size: 18.sp,
+              ),
+              CommonText(
+                text: label,
+                color: isSelected ? Colors.black : AppColors.textColor,
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w700,
+              ).paddingOnly(left: 7.w),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

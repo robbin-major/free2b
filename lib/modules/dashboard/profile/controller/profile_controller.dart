@@ -13,7 +13,6 @@ import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
-import 'package:flutter_template/utils/enum/common_enums.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -42,7 +41,7 @@ class ProfileController extends GetxController {
   @override
   Future<void> onInit() async {
     scrollController = ScrollController(onAttach: _handlePositionAttach);
-    await getEvent(eventStatus: EventStatus.APPROVAL);
+    await getAttendanceEvents(attended: false);
     getUserData();
     super.onInit();
   }
@@ -132,11 +131,11 @@ class ProfileController extends GetxController {
     isLoading.value = false;
   }
 
-  Future<void> getEvent({required EventStatus eventStatus}) async {
+  Future<void> getAttendanceEvents({required bool attended}) async {
     try {
       isEventLoading.value = true;
       eventData.value =
-          await HomeScreenService.getMyEventData(eventStatus: eventStatus);
+          await HomeScreenService.getAttendingEvents(attended: attended);
 
       isEventLoading.value = false;
       update();

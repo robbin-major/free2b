@@ -74,6 +74,13 @@ Map<String, String> en = {
   AppString.selectYourCategory: "Select your Category",
   AppString.submit: "Submit",
   AppString.noAnEvent: "This date is not an event.",
+  AppString.eventEnded: "Event ended",
+  AppString.eventHasPassed: "This event has passed",
+  AppString.addToCalendar: "Add to Calendar",
+  AppString.imAttending: "I'm Attending",
+  AppString.attending: "Attending",
+  AppString.calendarIntegrationComingSoon:
+      "Device calendar support is coming soon. This does not mark you as attending.",
   AppString.login: "LogIn",
   AppString.searchHere: "Search here...",
   AppString.continueText: "Continue",
