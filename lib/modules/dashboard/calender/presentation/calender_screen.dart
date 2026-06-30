@@ -405,7 +405,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
   }
 
   void _showEventsForDate(DateTime date) {
-    final List<EventModel> selectedEvents = _sortedEventsForDay(date);
+    DateTime sheetDate = date;
+    List<EventModel> selectedEvents = _sortedEventsForDay(sheetDate);
     final double initialSize = selectedEvents.length > 1 ? 0.58 : 0.42;
 
     _isEventSheetOpen = true;
@@ -413,18 +414,44 @@ class _CalenderScreenState extends State<CalenderScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.62),
+      barrierColor: Colors.black.withValues(alpha: 0.62),
       builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: initialSize,
-          minChildSize: 0.34,
-          maxChildSize: 0.88,
-          builder: (context, scrollController) {
-            return _buildEventSheetContent(
-              selectedDate: date,
-              selectedEvents: selectedEvents,
-              scrollController: scrollController,
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void moveSheetDay(int dayOffset) {
+              final DateTime nextDate =
+                  sheetDate.add(Duration(days: dayOffset));
+              setSheetState(() {
+                sheetDate = nextDate;
+                selectedEvents = _sortedEventsForDay(sheetDate);
+              });
+              setState(() {
+                _selectedDate = nextDate;
+                _displayedMonth = DateTime(nextDate.year, nextDate.month);
+              });
+              if (_monthPageController.hasClients) {
+                final int targetPage = _initialMonthPage +
+                    ((nextDate.year - _baseMonth.year) * 12) +
+                    nextDate.month -
+                    _baseMonth.month;
+                _monthPageController.jumpToPage(targetPage);
+              }
+            }
+
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: initialSize,
+              minChildSize: 0.34,
+              maxChildSize: 0.88,
+              builder: (context, scrollController) {
+                return _buildEventSheetContent(
+                  selectedDate: sheetDate,
+                  selectedEvents: selectedEvents,
+                  scrollController: scrollController,
+                  onPreviousDay: () => moveSheetDay(-1),
+                  onNextDay: () => moveSheetDay(1),
+                );
+              },
             );
           },
         );
@@ -444,6 +471,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
     required DateTime selectedDate,
     required List<EventModel> selectedEvents,
     required ScrollController scrollController,
+    required VoidCallback onPreviousDay,
+    required VoidCallback onNextDay,
   }) {
     final String eventCount =
         '${selectedEvents.length} ${selectedEvents.length == 1 ? 'event' : 'events'}';
@@ -471,9 +500,14 @@ class _CalenderScreenState extends State<CalenderScreen> {
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
             child: Row(
               children: [
+                _buildSheetDayButton(
+                  icon: Icons.chevron_left,
+                  onTap: onPreviousDay,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
                         DateFormat('EEEE, MMMM d').format(selectedDate),
@@ -500,8 +534,8 @@ class _CalenderScreenState extends State<CalenderScreen> {
                 ),
                 const SizedBox(width: 12),
                 _buildSheetDayButton(
-                  icon: Icons.close,
-                  onTap: () => Navigator.of(context).pop(),
+                  icon: Icons.chevron_right,
+                  onTap: onNextDay,
                 ),
               ],
             ),

@@ -33,6 +33,8 @@ class DashBoardController extends GetxController {
     return Future.value(true);
   }
 
+  // Future tab idea: replacing Bookmarks with Map requires a map plugin,
+  // Android/iOS API keys, and event geocoding before it is safe to ship.
   List<Widget> screen = [
     HomeScreen(),
     CalenderScreen(),

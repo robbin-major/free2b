@@ -15,7 +15,7 @@ class AppString {
   static const String continueWithGoogle = 'Continue with Google';
   static const String continueWithApple = 'Continue with Apple';
   static const String home = 'Home';
-  static const String myEvent = 'My Event';
+  static const String myEvent = 'Events Attending';
   static const String createEvent = 'Create Event';
   static const String settings = 'Settings';
   static const String profileSettings = 'Profile Settings';
@@ -43,7 +43,7 @@ class AppString {
   static const String privacyPolicy = 'Privacy Policy';
   static const String termsAndCondition = 'Terms & Conditions';
   static const String logOut = 'Log Out';
-  static const String pendingEvent = 'Pending Event';
+  static const String pendingEvent = 'Events Attended';
   static const String calendar = 'Calendar';
   static const String bookmark = 'Bookmark';
   static const String profile = 'Profile';
