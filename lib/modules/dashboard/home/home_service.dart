@@ -28,15 +28,7 @@ class HomeScreenService {
       }
 
       eventList.removeWhere(
-        (element) {
-          print("${element.title} :::::::::::::date time check 001 ${element.startDate!.split(" ")[1]}");
-          return ((element.startDate?.isEmpty ?? true) || element.startDate == " " || element.startDate == "Invalid date  undefined") ||
-              (element.startDate!.contains("Invalid") ||
-                  element.startDate!.contains("date") ||
-                  element.startDate!.contains("undefined") /*||
-                element.startDate!.split(" ")[1].isEmpty*/
-              );
-        },
+        (element) => !_isVisibleUpcomingEvent(element),
       );
 
       eventList.sort((a, b) {
@@ -121,11 +113,24 @@ class HomeScreenService {
     }
   }
 
-  static Future<void> eventAttendance({required List<String> attendingList}) async {
+  static Future<void> eventAttendance({
+    required String eventId,
+    required bool attending,
+  }) async {
     try {
       final String userID = AuthSessionService.userId;
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('users');
-      await collectionRef.doc(userID).update({"attending": attendingList});
+      if (userID.isEmpty || eventId.isEmpty) {
+        return;
+      }
+      await collectionRef.doc(userID).set(
+        {
+          "attending": attending
+              ? FieldValue.arrayUnion([eventId])
+              : FieldValue.arrayRemove([eventId]),
+        },
+        SetOptions(merge: true),
+      );
     } catch (error) {
       rethrow;
     }
@@ -161,7 +166,7 @@ class HomeScreenService {
           return true;
         }
 
-        final bool eventEnded = EventDateUtils.hasEventEnded(eventDate);
+        final bool eventEnded = _hasEventEnded(element, fallbackDate: eventDate);
         return attended ? !eventEnded : eventEnded;
       });
 
@@ -189,5 +194,37 @@ class HomeScreenService {
       // print(element.data());
     });
     return querySnapshot.docs.map((doc) => CategoryModel.fromFirestore(doc)).toList();
+  }
+
+  static bool _isVisibleUpcomingEvent(EventModel event) {
+    if (_hasInvalidEventStartDate(event.startDate)) {
+      return false;
+    }
+
+    final DateTime? startDate = EventDateUtils.parseEventDateTime(event.startDate);
+
+    if (startDate == null) {
+      return false;
+    }
+
+    return !_hasEventEnded(event, fallbackDate: startDate);
+  }
+
+  static bool _hasEventEnded(EventModel event, {DateTime? fallbackDate}) {
+    final DateTime? endDate = EventDateUtils.parseEventDateTime(event.endDate);
+    final DateTime? effectiveDate = endDate ?? fallbackDate ?? EventDateUtils.parseEventDateTime(event.startDate);
+
+    return effectiveDate != null && EventDateUtils.hasEventEnded(effectiveDate);
+  }
+
+  static bool _hasInvalidEventStartDate(String? startDate) {
+    final String value = startDate ?? '';
+
+    return (value.isEmpty ||
+        value == " " ||
+        value == "Invalid date  undefined" ||
+        value.contains("Invalid") ||
+        value.contains("date") ||
+        value.contains("undefined"));
   }
 }

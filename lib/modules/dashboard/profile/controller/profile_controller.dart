@@ -11,6 +11,7 @@ import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/modules/dashboard/profile/model/setting_model.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/app_string.dart';
+import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:get/get.dart';
@@ -134,6 +135,7 @@ class ProfileController extends GetxController {
   Future<void> getAttendanceEvents({required bool attended}) async {
     try {
       isEventLoading.value = true;
+      await AuthSessionService.syncCurrentUserToPrefs();
       eventData.value =
           await HomeScreenService.getAttendingEvents(attended: attended);
 

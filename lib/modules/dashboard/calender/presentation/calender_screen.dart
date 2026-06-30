@@ -297,7 +297,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final List<EventModel> eventsForDay = _eventsForDay(date);
     final bool hasEvents = eventsForDay.isNotEmpty;
     final bool hasActiveEvents = eventsForDay.any((event) {
-      final DateTime? eventDate = _eventDate(event);
+      final DateTime? eventDate = _eventEffectiveEndDate(event);
       return eventDate != null && !EventDateUtils.hasEventEnded(eventDate);
     });
 
@@ -399,6 +399,11 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
   DateTime? _eventDate(EventModel event) {
     return EventDateUtils.parseEventDateTime(event.startDate);
+  }
+
+  DateTime? _eventEffectiveEndDate(EventModel event) {
+    return EventDateUtils.parseEventDateTime(event.endDate) ??
+        EventDateUtils.parseEventDateTime(event.startDate);
   }
 
   bool _isPastDate(DateTime date) {
@@ -604,8 +609,9 @@ class _CalenderScreenState extends State<CalenderScreen> {
 
   Widget _buildAgendaCard(EventModel event) {
     final DateTime? eventDateTime = _eventDate(event);
-    final bool ended = eventDateTime != null &&
-        EventDateUtils.hasEventEnded(eventDateTime);
+    final DateTime? eventEndDateTime = _eventEffectiveEndDate(event);
+    final bool ended = eventEndDateTime != null &&
+        EventDateUtils.hasEventEnded(eventEndDateTime);
     final String timeText = _formatEventTime(eventDateTime);
     final String location = _eventLocation(event);
 

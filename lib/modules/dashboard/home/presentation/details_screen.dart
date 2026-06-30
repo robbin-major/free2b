@@ -175,32 +175,33 @@ class DetailsScreen extends StatelessWidget {
                       ),
                     ],
                   ).paddingOnly(bottom: 6.h),
-                  Wrap(
-                    spacing: 10.w,
-                    runSpacing: 10.h,
-                    children: [
-                      _buildEventAction(
-                        icon: Icons.calendar_month_outlined,
-                        label: AppString.addToCalendar,
-                        onTap: () => _showCalendarIntegrationMessage(context),
-                      ),
-                      Obx(() {
-                        final bool isAttending = _isAttendingEvent();
+                  if (!_hasEventEnded())
+                    Wrap(
+                      spacing: 10.w,
+                      runSpacing: 10.h,
+                      children: [
+                        _buildEventAction(
+                          icon: Icons.calendar_month_outlined,
+                          label: AppString.addToCalendar,
+                          onTap: () => _showCalendarIntegrationMessage(context),
+                        ),
+                        Obx(() {
+                          final bool isAttending = _isAttendingEvent();
 
-                        return _buildEventAction(
-                          icon: isAttending
-                              ? Icons.check_circle
-                              : Icons.check_circle_outline,
-                          label: isAttending
-                              ? AppString.attending
-                              : AppString.imAttending,
-                          isSelected: isAttending,
-                          onTap: () => _toggleAttending(context),
-                        );
-                      }),
-                    ],
-                  ).paddingOnly(bottom: 12.h),
-                  if (_hasEventEnded(_detailController.eventModel.startDate))
+                          return _buildEventAction(
+                            icon: isAttending
+                                ? Icons.check_circle
+                                : Icons.check_circle_outline,
+                            label: isAttending
+                                ? AppString.attending
+                                : AppString.imAttending,
+                            isSelected: isAttending,
+                            onTap: () => _toggleAttending(context),
+                          );
+                        }),
+                      ],
+                    ).paddingOnly(bottom: 12.h),
+                  if (_hasEventEnded())
                     Container(
                       padding: EdgeInsets.symmetric(
                         horizontal: 10.w,
@@ -266,9 +267,14 @@ class DetailsScreen extends StatelessWidget {
     );
   }
 
-  bool _hasEventEnded(String? startDate) {
+  bool _hasEventEnded() {
     final DateTime? eventDateTime =
-        EventDateUtils.parseEventDateTime(startDate);
+        EventDateUtils.parseEventDateTime(
+              _detailController.eventModel.endDate,
+            ) ??
+            EventDateUtils.parseEventDateTime(
+              _detailController.eventModel.startDate,
+            );
 
     return eventDateTime != null &&
         EventDateUtils.hasEventEnded(eventDateTime);
@@ -304,7 +310,10 @@ class DetailsScreen extends StatelessWidget {
       _detailController.attendingId.add(eventId);
     }
 
-    await _detailController.eventAttendance();
+    await _detailController.eventAttendance(
+      eventId: eventId,
+      attending: !isAttending,
+    );
   }
 
   void _showCalendarIntegrationMessage(BuildContext context) {
@@ -312,8 +321,12 @@ class DetailsScreen extends StatelessWidget {
       SnackBar(
         content: const Text(
           AppString.calendarIntegrationComingSoon,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        backgroundColor: AppColors.backgroundLightColor,
+        backgroundColor: const Color(0xFF1A1A1A),
         behavior: SnackBarBehavior.floating,
       ),
     );

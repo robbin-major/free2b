@@ -217,7 +217,8 @@ class _EventSliderState extends State<EventSlider> {
 
   bool _hasEventEnded(EventModel event) {
     final DateTime? eventDateTime =
-        EventDateUtils.parseEventDateTime(event.startDate);
+        EventDateUtils.parseEventDateTime(event.endDate) ??
+            EventDateUtils.parseEventDateTime(event.startDate);
 
     return eventDateTime != null &&
         EventDateUtils.hasEventEnded(eventDateTime);

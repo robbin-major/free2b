@@ -19,6 +19,7 @@ class EventModel {
   final String? title;
   final String? aptSuiteOther;
   final String? startDate;
+  final String? endDate;
   final String? status;
   final String? eventID;
   final List<Category>? category;
@@ -37,6 +38,7 @@ class EventModel {
     this.title,
     this.aptSuiteOther,
     this.startDate,
+    this.endDate,
     this.status,
     this.eventID,
     this.category,
@@ -55,6 +57,7 @@ class EventModel {
         createdAt: createdAt,
         aptSuiteOther: aptSuiteOther,
         startDate: startDate,
+        endDate: endDate,
         status: status,
         eventID: eventID,
         zipCode: zipCode,
@@ -75,6 +78,7 @@ class EventModel {
     String? title,
     String? aptSuiteOther,
     String? startDate,
+    String? endDate,
     String? status,
     String? eventID,
     List<Category>? category,
@@ -92,6 +96,7 @@ class EventModel {
         title: title ?? this.title,
         aptSuiteOther: aptSuiteOther ?? this.aptSuiteOther,
         startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
         status: status ?? this.status,
         eventID: eventID ?? this.eventID,
         zipCode: zipCode ?? this.zipCode,
@@ -114,6 +119,7 @@ class EventModel {
         createdAt: json["createdAt"],
         aptSuiteOther: json["Apt/Suite/Other"],
         startDate: json["startDate"],
+        endDate: json["endDate"] ?? json["endDateTime"] ?? json["endTime"],
         status: json["status"],
         // category: json["category"] == null ? [] : List<Category>.from(json["category"]!.map((x) => x)),
         category: json["category"] == null
@@ -140,6 +146,7 @@ class EventModel {
         "createdAt": createdAt ?? '',
         "Apt/Suite/Other": aptSuiteOther ?? '',
         "startDate": startDate ?? '',
+        "endDate": endDate ?? '',
         "status": status ?? '',
         "category": category == null
             ? []

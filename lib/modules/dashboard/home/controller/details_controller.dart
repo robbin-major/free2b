@@ -57,10 +57,16 @@ class DetailController extends GetxController {
     }
   }
 
-  Future<void> eventAttendance() async {
+  Future<void> eventAttendance({
+    required String eventId,
+    required bool attending,
+  }) async {
     try {
       isLoading.value = true;
-      await HomeScreenService.eventAttendance(attendingList: attendingId);
+      await HomeScreenService.eventAttendance(
+        eventId: eventId,
+        attending: attending,
+      );
       await getUserData();
       isLoading.value = false;
     } catch (error) {
