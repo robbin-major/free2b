@@ -165,16 +165,14 @@ class DetailsScreen extends StatelessWidget {
                           format: "dd MMM yyyy",
                           date:
                               _detailController.eventModel.startDate.toString(),
-                        )} at ${_detailController.eventModel.startDate!.split(" ")[1] == "" ? "--" : Utils.getDateTime(
-                            format: "hh:mm a",
-                            date: _detailController.eventModel.startDate
-                                .toString(),
-                        )}",
+                        )} at ${_eventTimeText(_detailController.eventModel.startDate)}",
                         fontWeight: FontWeight.w600,
                         fontSize: 12.sp,
                       ),
                     ],
                   ).paddingOnly(bottom: 6.h),
+                  // Future: event-specific discussion threads need moderation,
+                  // reporting, and admin review before public posting ships.
                   if (!_hasEventEnded())
                     Wrap(
                       spacing: 10.w,
@@ -278,6 +276,19 @@ class DetailsScreen extends StatelessWidget {
 
     return eventDateTime != null &&
         EventDateUtils.hasEventEnded(eventDateTime);
+  }
+
+  String _eventTimeText(String? startDate) {
+    final List<String> dateParts = (startDate ?? '').trim().split(' ');
+
+    if (dateParts.length < 2 || dateParts[1].isEmpty) {
+      return '--';
+    }
+
+    return Utils.getDateTime(
+      format: "hh:mm a",
+      date: startDate.toString(),
+    );
   }
 
   bool _isAttendingEvent() {

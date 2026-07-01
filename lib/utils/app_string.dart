@@ -91,6 +91,8 @@ class AppString {
   static const String attending = 'Attending';
   static const String calendarIntegrationComingSoon =
       'Device calendar support is coming soon. This does not mark you as attending.';
+  static const String bookmarkSocialTeaser =
+      "Soon, you'll be able to see which friends are attending events and discover events on a city map.";
   static const String login = 'LogIn';
   static const String searchHere = 'Search here...';
   static const String continueText = 'Continue';

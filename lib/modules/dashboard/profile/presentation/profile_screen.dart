@@ -47,32 +47,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     return AuthSessionService.isSignedIn
         ? Scaffold(
-            floatingActionButton: Obx(
-              () {
-                return GestureDetector(
-                  onTap: () => Navigation.pushNamed(Routes.createEvent),
-                  child: AnimatedContainer(
-                    decoration: BoxDecoration(
-                      color: AppColors.yellowButtonColor,
-                      borderRadius: BorderRadius.circular(6.r),
-                    ),
-                    padding:
-                        EdgeInsets.symmetric(vertical: 8.h, horizontal: 12.w),
-                    duration: const Duration(seconds: 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SvgPicture.asset(IconAsset.plusIcon),
-                        (_profileController.isScrolling.value)
-                            ? const SizedBox.shrink()
-                            : const CommonText(text: AppString.createEvent)
-                                .paddingOnly(left: 8.w),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
             backgroundColor: AppColors.backgroundColor,
             appBar: CustomAppBar(
               automaticallyImplyLeading: false,

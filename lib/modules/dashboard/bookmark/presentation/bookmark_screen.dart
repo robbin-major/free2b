@@ -41,28 +41,48 @@ class BookMarkScreen extends StatelessWidget {
                 () => bookMarkController.isBookMarkLoading.value
                     ? const CustomLoadingWidget()
                     : bookMarkController.bookMarkEvent.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.max,
-                              children: [
-                                SvgPicture.asset(IconAsset.smileys),
-                                12.h.verticalSpace,
-                                CommonText(
-                                  text: AppString.noEventFound,
-                                  color: AppColors.textLightColor,
-                                  fontSize: 20.sp,
-                                  fontWeight: FontWeight.w500,
-                                )
-                              ],
-                            ),
+                        ? ListView(
+                            children: [
+                              _socialTeaser().paddingSymmetric(
+                                horizontal: 16.w,
+                                vertical: 12.h,
+                              ),
+                              SizedBox(
+                                height: Get.height * 0.55,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      SvgPicture.asset(IconAsset.smileys),
+                                      12.h.verticalSpace,
+                                      CommonText(
+                                        text: AppString.noEventFound,
+                                        color: AppColors.textLightColor,
+                                        fontSize: 20.sp,
+                                        fontWeight: FontWeight.w500,
+                                      )
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           )
                         : ListView.builder(
                             shrinkWrap: true,
-                            itemCount: bookMarkController.bookMarkEvent.length,
+                            itemCount: bookMarkController.bookMarkEvent.length + 1,
                             itemBuilder: (context, index) {
-                              final eventData = bookMarkController.bookMarkEvent[index];
+                              if (index == 0) {
+                                return _socialTeaser().paddingSymmetric(
+                                  horizontal: 16.w,
+                                  vertical: 12.h,
+                                );
+                              }
+
+                              final eventData =
+                                  bookMarkController.bookMarkEvent[index - 1];
                               return GestureDetector(
                                 behavior: HitTestBehavior.translucent,
                                 onTap: () async {
@@ -118,10 +138,7 @@ class BookMarkScreen extends StatelessWidget {
                                                           text: "${Utils.getFormattedDate(
                                                             format: "dd-MM-yyyy",
                                                             date: eventData.startDate.toString(),
-                                                          )} at ${eventData.startDate!.split(" ")[1] == "" ? "--" : Utils.getDateTime(
-                                                              format: "hh:mm a",
-                                                              date: eventData.startDate.toString(),
-                                                            )}",
+                                                          )} at ${_eventTimeText(eventData.startDate)}",
                                                           fontWeight: FontWeight.w600,
                                                           fontSize: 12.sp,
                                                           softWrap: true,
@@ -162,5 +179,50 @@ class BookMarkScreen extends StatelessWidget {
         : const GetStartedScreen(
             isAnonymous: true,
           );
+  }
+
+  Widget _socialTeaser() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLightColor,
+        borderRadius: BorderRadius.circular(8.r),
+        border: Border.all(
+          color: AppColors.yellowButtonColor.withValues(alpha: 0.34),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.auto_awesome,
+            color: AppColors.yellowButtonColor,
+            size: 18.sp,
+          ).paddingOnly(top: 2.h),
+          Expanded(
+            child: CommonText(
+              text: AppString.bookmarkSocialTeaser,
+              color: AppColors.textColor,
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+              softWrap: true,
+            ).paddingOnly(left: 10.w),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _eventTimeText(String? startDate) {
+    final List<String> dateParts = (startDate ?? '').trim().split(' ');
+
+    if (dateParts.length < 2 || dateParts[1].isEmpty) {
+      return '--';
+    }
+
+    return Utils.getDateTime(
+      format: "hh:mm a",
+      date: startDate.toString(),
+    );
   }
 }

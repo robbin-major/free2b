@@ -98,9 +98,9 @@ class HomeScreenService {
       }
       return null;
     } catch (error) {
-      rethrow;
+      print("GET USER DATA ERROR $error");
+      return AppPreference.getUser();
     }
-    return null;
   }
 
   static Future<void> eventBookmark({required List<String> bookmarkList}) async {

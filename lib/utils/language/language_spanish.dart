@@ -82,6 +82,8 @@ Map<String, String> sp = {
   AppString.attending: "Attending",
   AppString.calendarIntegrationComingSoon:
       "Device calendar support is coming soon. This does not mark you as attending.",
+  AppString.bookmarkSocialTeaser:
+      "Soon, you'll be able to see which friends are attending events and discover events on a city map.",
   AppString.login: "Acceso",
   AppString.searchHere: "Busca aquí...",
   AppString.continueText: "Continuar",

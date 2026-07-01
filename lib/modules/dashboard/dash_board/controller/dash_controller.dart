@@ -33,8 +33,9 @@ class DashBoardController extends GetxController {
     return Future.value(true);
   }
 
-  // Future tab idea: replacing Bookmarks with Map requires a map plugin,
-  // Android/iOS API keys, and event geocoding before it is safe to ship.
+  // Future tab idea: replacing Bookmarks with Map should show today's
+  // Chicago events first. Friend/people-attending signals should be opt-in,
+  // privacy-preserving, and backed by moderation before public rollout.
   List<Widget> screen = [
     HomeScreen(),
     CalenderScreen(),
