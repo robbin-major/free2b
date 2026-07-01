@@ -276,9 +276,9 @@ class DetailsScreen extends StatelessWidget {
           height: 42.h,
           width: 42.h,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.48),
+            color: Colors.black.withValues(alpha: 0.48),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.18)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
           ),
           child: Center(
             child: svgAsset != null
@@ -307,7 +307,7 @@ class DetailsScreen extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: (isAccent ? const Color(0xFF31E6A0) : const Color(0xFFFF4FB8))
-                .withOpacity(0.24),
+                .withValues(alpha: 0.24),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -326,12 +326,12 @@ class DetailsScreen extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: Colors.white.withOpacity(0.86), size: 18.sp)
+        Icon(icon, color: Colors.white.withValues(alpha: 0.86), size: 18.sp)
             .paddingOnly(right: 8.w, top: 1.h),
         Expanded(
           child: CommonText(
             text: text,
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white.withValues(alpha: 0.9),
             fontSize: 13.sp,
             fontWeight: FontWeight.w700,
             maxLine: 2,
@@ -372,8 +372,10 @@ class DetailsScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFFF4FB8).withOpacity(0.9 - index * 0.1),
-                          const Color(0xFF31E6A0).withOpacity(0.9 - index * 0.1),
+                          const Color(0xFFFF4FB8)
+                              .withValues(alpha: 0.9 - index * 0.1),
+                          const Color(0xFF31E6A0)
+                              .withValues(alpha: 0.9 - index * 0.1),
                         ],
                       ),
                       border: Border.all(
@@ -484,9 +486,11 @@ class DetailsScreen extends StatelessWidget {
       width: Get.width,
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: AppColors.disableButtonColor.withOpacity(0.16),
+        color: AppColors.disableButtonColor.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: AppColors.disableButtonColor.withOpacity(0.4)),
+        border: Border.all(
+          color: AppColors.disableButtonColor.withValues(alpha: 0.4),
+        ),
       ),
       child: CommonText(
         text: AppString.eventHasPassed,
