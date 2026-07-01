@@ -88,9 +88,9 @@ class DetailsScreen extends StatelessWidget {
                     AppPrefService.getUserUid())
                   Obx(
                     () => _buildCircleIconButton(
-                      svgAsset: _isBookmarked()
-                          ? IconAsset.bookMarkDoneIcon
-                          : IconAsset.bookMarkIcon,
+                      icon: _isBookmarked()
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
                       onTap: () => _toggleBookmark(context),
                     ),
                   ).paddingOnly(right: 10.w),
@@ -234,18 +234,8 @@ class DetailsScreen extends StatelessWidget {
                   child: TabBarView(
                     children: [
                       _buildAboutTab(),
-                      _buildPlanningTab(
-                        icon: Icons.forum_outlined,
-                        title: 'Event discussion is coming later',
-                        body:
-                            'Future event threads will need reporting, filters, and admin review before public posting goes live.',
-                      ),
-                      _buildPlanningTab(
-                        icon: Icons.photo_library_outlined,
-                        title: 'Future memories will live here',
-                        body:
-                            'A later version can let people revisit photos, reactions, and moments after an event, with privacy controls first.',
-                      ),
+                      _buildDiscussionTab(),
+                      _buildMemoriesTab(),
                     ],
                   ),
                 ),
@@ -503,13 +493,15 @@ class DetailsScreen extends StatelessWidget {
   }
 
   Widget _buildAboutTab() {
-    final List<String> descriptions = _detailController.eventModel.description ?? [];
+    final List<String> descriptions =
+        _detailController.eventModel.description ?? [];
 
     if (descriptions.isEmpty) {
       return _buildPlanningTab(
         icon: Icons.info_outline,
         title: 'More details coming soon',
-        body: 'Check back for event notes, schedule details, and accessibility information.',
+        body:
+            'Check back for event notes, schedule details, and accessibility information.',
       );
     }
 
@@ -528,6 +520,213 @@ class DetailsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDiscussionTab() {
+    return Container(
+      width: Get.width,
+      padding: EdgeInsets.all(16.h),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLightColor,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: AppColors.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.forum_outlined,
+                color: const Color(0xFFFF7BD5),
+                size: 22.sp,
+              ).paddingOnly(right: 8.w),
+              CommonText(
+                text: 'Discussion is coming soon',
+                color: Colors.white,
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w800,
+              ),
+            ],
+          ).paddingOnly(bottom: 12.h),
+          _buildMockComment(
+            initials: 'J',
+            name: 'Julie',
+            text: "I'm excited for this!",
+            accentColor: const Color(0xFFFF4FB8),
+          ),
+          _buildMockComment(
+            initials: 'M',
+            name: 'Matthew',
+            text: 'Who else is going?',
+            accentColor: const Color(0xFF31E6A0),
+          ),
+          _buildMockComment(
+            initials: 'A',
+            name: 'Alex',
+            text: "Can't wait!",
+            accentColor: const Color(0xFFB45CFF),
+          ),
+          const Spacer(),
+          Container(
+            height: 44.h,
+            padding: EdgeInsets.symmetric(horizontal: 14.w),
+            decoration: BoxDecoration(
+              color: const Color(0xFF191A22),
+              borderRadius: BorderRadius.circular(12.r),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: CommonText(
+                    text: 'Join the conversation soon.',
+                    color: AppColors.textLightColor,
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w700,
+                    maxLine: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(
+                  Icons.send_rounded,
+                  color: const Color(0xFFFF7BD5),
+                  size: 18.sp,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockComment({
+    required String initials,
+    required String name,
+    required String text,
+    required Color accentColor,
+  }) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 10.h),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 30.h,
+            width: 30.h,
+            decoration: BoxDecoration(
+              color: accentColor,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: CommonText(
+                text: initials,
+                color: Colors.black,
+                fontSize: 11.sp,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ).paddingOnly(right: 10.w),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14151B),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CommonText(
+                    text: name,
+                    color: Colors.white,
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w800,
+                  ).paddingOnly(bottom: 3.h),
+                  CommonText(
+                    text: text,
+                    color: AppColors.textLightColor,
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemoriesTab() {
+    return Container(
+      width: Get.width,
+      padding: EdgeInsets.all(18.h),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundLightColor,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: AppColors.dividerColor),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            height: 96.h,
+            width: Get.width,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18.r),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFFF4FB8),
+                  Color(0xFFB45CFF),
+                  Color(0xFF31E6A0),
+                ],
+              ),
+            ),
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 18.w,
+                  top: 18.h,
+                  child: Icon(
+                    Icons.photo_camera_outlined,
+                    color: Colors.white,
+                    size: 30.sp,
+                  ),
+                ),
+                Positioned(
+                  right: 18.w,
+                  bottom: 16.h,
+                  child: Icon(
+                    Icons.auto_awesome,
+                    color: Colors.white,
+                    size: 24.sp,
+                  ),
+                ),
+              ],
+            ),
+          ).paddingOnly(bottom: 16.h),
+          CommonText(
+            text: 'Memories will live here.',
+            color: Colors.white,
+            fontSize: 17.sp,
+            fontWeight: FontWeight.w900,
+            textAlign: TextAlign.center,
+          ).paddingOnly(bottom: 8.h),
+          CommonText(
+            text:
+                "After events, you'll be able to revisit photos, reactions, and moments shared by the community.",
+            color: AppColors.textLightColor,
+            fontSize: 13.sp,
+            fontWeight: FontWeight.w600,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -758,18 +957,74 @@ class DetailsScreen extends StatelessWidget {
   }
 
   void _showCalendarIntegrationMessage(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text(
-          AppString.calendarIntegrationComingSoon,
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
+    final OverlayState? overlay = Overlay.maybeOf(context);
+
+    if (overlay == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            AppString.calendarIntegrationComingSoon,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          backgroundColor: Color(0xFF1A1A1A),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 24.w,
+        right: 24.w,
+        top: MediaQuery.of(context).padding.top + 470.h,
+        child: Material(
+          color: Colors.transparent,
+          child: IgnorePointer(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 13.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFF15151A),
+                borderRadius: BorderRadius.circular(14.r),
+                border: Border.all(color: const Color(0xFFFF7BD5)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.34),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_month_outlined,
+                    color: const Color(0xFFFF7BD5),
+                    size: 20.sp,
+                  ).paddingOnly(right: 10.w),
+                  Expanded(
+                    child: CommonText(
+                      text: AppString.calendarIntegrationComingSoon,
+                      color: Colors.white,
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        backgroundColor: const Color(0xFF1A1A1A),
-        behavior: SnackBarBehavior.floating,
       ),
     );
+
+    overlay.insert(entry);
+    Future.delayed(const Duration(seconds: 3), entry.remove);
   }
 }
