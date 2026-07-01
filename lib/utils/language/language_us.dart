@@ -80,7 +80,7 @@ Map<String, String> en = {
   AppString.imAttending: "I'm Attending",
   AppString.attending: "Attending",
   AppString.calendarIntegrationComingSoon:
-      "Device calendar support is coming soon. This does not mark you as attending.",
+      "Device calendar support is coming soon.",
   AppString.bookmarkSocialTeaser:
       "Soon, you'll be able to see which friends are attending events and discover events on a city map.",
   AppString.login: "LogIn",
