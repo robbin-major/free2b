@@ -83,7 +83,7 @@ class AppString {
   static const String category = 'Category';
   static const String close = 'Close';
   static const String selectYourCategory = 'Select your Category';
-  static const String noAnEvent = 'This date is not an event.';
+  static const String noAnEvent = 'No events found for this date.';
   static const String eventEnded = 'Event ended';
   static const String eventHasPassed = 'This event has passed';
   static const String addToCalendar = 'Add to Calendar';

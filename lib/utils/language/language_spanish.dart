@@ -74,7 +74,7 @@ Map<String, String> sp = {
   AppString.category: "Categoría",
   AppString.close: "Cerca",
   AppString.selectYourCategory: "Seleccione su categoría",
-  AppString.noAnEvent: "Esta fecha no es un evento.",
+  AppString.noAnEvent: "No events found for this date.",
   AppString.eventEnded: "Event ended",
   AppString.eventHasPassed: "This event has passed",
   AppString.addToCalendar: "Add to Calendar",

@@ -42,6 +42,45 @@ class HomeScreenService {
     }
   }
 
+  static Future<List<EventModel>> getCalendarEventData() async {
+    try {
+      final String userID = AuthSessionService.userId;
+      final List<EventModel> eventList = <EventModel>[];
+      CollectionReference collectionRef =
+          FirebaseFirestore.instance.collection('event');
+      QuerySnapshot querySnapshot = await collectionRef
+          .where("uid", isNotEqualTo: userID)
+          .where("status", isEqualTo: EventStatus.APPROVAL.eventType)
+          .get();
+
+      for (var element in querySnapshot.docs) {
+        final EventModel eventModel =
+            EventModel.fromJson(element.data() as Map<String, dynamic>);
+        eventList.add(eventModel.copyWith(eventID: element.id));
+      }
+
+      eventList.removeWhere(
+        (element) => EventDateUtils.parseEventDateTime(element.startDate) == null,
+      );
+
+      eventList.sort((a, b) {
+        final DateTime? aDate = EventDateUtils.parseEventDateTime(a.startDate);
+        final DateTime? bDate = EventDateUtils.parseEventDateTime(b.startDate);
+
+        if (aDate == null || bDate == null) {
+          return 0;
+        }
+
+        return aDate.compareTo(bDate);
+      });
+
+      return eventList;
+    } catch (error, st) {
+      print("GET CALENDAR EVENT ERROR $error --- $st");
+      rethrow;
+    }
+  }
+
   static Future<List<EventModel>> getMyEventData({required EventStatus eventStatus}) async {
     try {
       final String userID = AuthSessionService.userId;

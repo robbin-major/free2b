@@ -1,6 +1,5 @@
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
-import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
@@ -21,16 +20,7 @@ class CalenderController extends GetxController {
   Future<void> doGetEventData() async {
     try {
       isLoading.value = true;
-      eventData.value = await HomeScreenService.getEventData();
-      print("length ::::::::::${eventData.length}");
-
-      eventData.removeWhere((element) {
-        final DateTime? eventDate =
-            EventDateUtils.parseEventDateTime(element.startDate);
-
-        return eventDate == null ||
-            !EventDateUtils.isWithinCalendarVisibilityWindow(eventDate);
-      });
+      eventData.value = await HomeScreenService.getCalendarEventData();
       print("length ::::::::::${eventData.length}");
       isLoading.value = false;
     } catch (error) {
