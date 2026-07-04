@@ -95,7 +95,9 @@ class CreateEventController extends GetxController {
     HomeScreenService.fetchCategories().then((value) {
       value.forEach((e) => print(e.name));
       categories = value;
-      print(categories[1].catId);
+      if (categories.length > 1) {
+        print(categories[1].catId);
+      }
     });
     getCategoryData();
     addTextField(); // Add initial text field

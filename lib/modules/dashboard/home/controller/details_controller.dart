@@ -16,7 +16,7 @@ import '../../../../utils/app_colors.dart';
 class DetailController extends GetxController {
   RxBool isBookMark = false.obs;
   EventModel eventModel = EventModel();
-  Rx<UserModel?> userData = UserModel().obs;
+  Rx<UserModel?> userData = Rx<UserModel?>(null);
   RxList<String> bookMarkId = <String>[].obs;
   RxList<String> attendingId = <String>[].obs;
   RxBool isLoading = false.obs;

@@ -50,7 +50,7 @@ class HomeController extends GetxController {
       // Extract unique categories
       final categories = <String>{}; // Use Set to avoid duplicates
       for (var event in eventData) {
-        final name = event.category?.first.categoryName;
+        final name = _firstCategoryName(event);
         if (name != null && name.trim().isNotEmpty) {
           categories.add(name.trim());
         }
@@ -85,11 +85,10 @@ class HomeController extends GetxController {
         } else {
           print("Search ${eventData.length}");
           searchEventData.value = eventData.where((p0) {
-            print("p0.category ${p0.category?[0].categoryName}");
-            return (p0.category?[0].categoryName
-                    ?.toLowerCase()
-                    .contains(value.toLowerCase()) ??
-                false);
+            final String? categoryName = _firstCategoryName(p0);
+            print("p0.category $categoryName");
+            return categoryName?.toLowerCase().contains(value.toLowerCase()) ??
+                false;
           }).toList();
         }
       });
@@ -176,6 +175,14 @@ class HomeController extends GetxController {
     } finally {
       isLocationLoading.value = false;
     }
+  }
+
+  String? _firstCategoryName(EventModel event) {
+    final categories = event.category;
+    if (categories == null || categories.isEmpty) {
+      return null;
+    }
+    return categories.first.categoryName;
   }
 
   void clearLocationFilter() {

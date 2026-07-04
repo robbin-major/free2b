@@ -50,18 +50,32 @@ class _CountryStateCityPickerState extends State<CountryStateCityPicker> {
     super.initState();
   }
 
+  Future<List<dynamic>> _loadJsonList(String assetPath) async {
+    try {
+      final String jsonString = await rootBundle.loadString(assetPath);
+      final dynamic decoded = json.decode(jsonString);
+      return decoded is List<dynamic> ? decoded : <dynamic>[];
+    } catch (error) {
+      debugPrint('Country picker asset load failed for $assetPath: $error');
+      return <dynamic>[];
+    }
+  }
+
   Future<void> _getCountry() async {
     _countryList.clear();
-    var jsonString =
-        await rootBundle.loadString('assets/temp_image/country.json');
-    List<dynamic> body = json.decode(jsonString);
+    final List<dynamic> body =
+        await _loadJsonList('assets/temp_image/country.json');
+    final List<CountryModel> countries =
+        body.map((dynamic item) => CountryModel.fromJson(item)).toList();
+    if (!mounted || countries.isEmpty) {
+      return;
+    }
     setState(() {
-      _countryList =
-          body.map((dynamic item) => CountryModel.fromJson(item)).toList();
+      _countryList = countries;
       _countrySubList = _countryList;
-      print(_countrySubList[0].name);
-      widget.country.text = _countrySubList[0].name;
-      _getState(_countrySubList[0].id.toString());
+      print(_countrySubList.first.name);
+      widget.country.text = _countrySubList.first.name;
+      _getState(_countrySubList.first.id.toString());
       _countrySubList = _countryList;
       widget.state.clear();
       widget.city.clear();
@@ -72,37 +86,46 @@ class _CountryStateCityPickerState extends State<CountryStateCityPicker> {
     _stateList.clear();
     _cityList.clear();
     List<StateModel> subStateList = [];
-    var jsonString =
-        await rootBundle.loadString('assets/temp_image/state.json');
-    List<dynamic> body = json.decode(jsonString);
+    final List<dynamic> body =
+        await _loadJsonList('assets/temp_image/state.json');
 
     subStateList =
         body.map((dynamic item) => StateModel.fromJson(item)).toList();
+    final List<StateModel> matchingStates = <StateModel>[];
     for (var element in subStateList) {
       if (element.countryId == countryId) {
-        setState(() {
-          _stateList.add(element);
-        });
+        matchingStates.add(element);
       }
     }
-    _stateSubList = _stateList;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _stateList.addAll(matchingStates);
+      _stateSubList = _stateList;
+    });
   }
 
   Future<void> _getCity(String stateId) async {
     _cityList.clear();
     List<CityModel> subCityList = [];
-    var jsonString = await rootBundle.loadString('assets/temp_image/city.json');
-    List<dynamic> body = json.decode(jsonString);
+    final List<dynamic> body =
+        await _loadJsonList('assets/temp_image/city.json');
 
     subCityList = body.map((dynamic item) => CityModel.fromJson(item)).toList();
+    final List<CityModel> matchingCities = <CityModel>[];
     for (var element in subCityList) {
       if (element.stateId == stateId) {
-        setState(() {
-          _cityList.add(element);
-        });
+        matchingCities.add(element);
       }
     }
-    _citySubList = _cityList;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cityList.addAll(matchingCities);
+      _citySubList = _cityList;
+    });
   }
 
   @override

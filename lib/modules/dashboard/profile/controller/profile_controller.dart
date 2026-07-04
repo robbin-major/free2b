@@ -123,11 +123,12 @@ class ProfileController extends GetxController {
     }
   }
 
-  Rx<UserModel?> userData = UserModel().obs;
+  Rx<UserModel?> userData = Rx<UserModel?>(null);
 
   Future getUserData() async {
     isLoading.value = true;
-    userData.value = await HomeScreenService.getUserData();
+    final UserModel? currentUser = await HomeScreenService.getUserData();
+    userData.value = currentUser;
     await AppPreference.setUser(userData.value);
     isLoading.value = false;
   }
