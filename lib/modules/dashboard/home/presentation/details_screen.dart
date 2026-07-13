@@ -18,6 +18,11 @@ import 'package:share_plus/share_plus.dart';
 class DetailsScreen extends StatelessWidget {
   DetailsScreen({super.key});
 
+  static const Color _gold = Color(0xFFBB9A65);
+  static const Color _softGold = Color(0xFFE2C078);
+  static const Color _deepGold = Color(0xFF7A5A2A);
+  static const Color _panel = Color(0xFF171717);
+
   final DetailController _detailController = Get.put(DetailController());
 
   @override
@@ -192,6 +197,7 @@ class DetailsScreen extends StatelessWidget {
               label: 'Share Event',
               onTap: _shareEvent,
             ).paddingOnly(top: 14.h),
+          _buildLocationPreview().paddingOnly(top: 18.h),
           DefaultTabController(
             length: 3,
             child: Column(
@@ -209,7 +215,7 @@ class DetailsScreen extends StatelessWidget {
                     indicator: BoxDecoration(
                       borderRadius: BorderRadius.circular(12.r),
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFFF4FB8), Color(0xFFB45CFF)],
+                        colors: [_softGold, _deepGold],
                       ),
                     ),
                     labelColor: Colors.white,
@@ -292,14 +298,16 @@ class DetailsScreen extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 7.h),
       decoration: BoxDecoration(
-        color: isAccent ? const Color(0xFF31E6A0) : const Color(0xFFFF4FB8),
+        color: isAccent ? _softGold : Colors.black.withValues(alpha: 0.62),
         borderRadius: BorderRadius.circular(999.r),
+        border: Border.all(
+          color: isAccent ? Colors.transparent : _gold.withValues(alpha: 0.6),
+        ),
         boxShadow: [
           BoxShadow(
-            color: (isAccent ? const Color(0xFF31E6A0) : const Color(0xFFFF4FB8))
-                .withValues(alpha: 0.24),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: _gold.withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -362,9 +370,9 @@ class DetailsScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFFF4FB8)
+                          _softGold
                               .withValues(alpha: 0.9 - index * 0.1),
-                          const Color(0xFF31E6A0)
+                          _deepGold
                               .withValues(alpha: 0.9 - index * 0.1),
                         ],
                       ),
@@ -422,8 +430,7 @@ class DetailsScreen extends StatelessWidget {
         ),
         style: ElevatedButton.styleFrom(
           foregroundColor: isAttending ? Colors.black : Colors.white,
-          backgroundColor:
-              isAttending ? const Color(0xFF31E6A0) : const Color(0xFFFF4FB8),
+          backgroundColor: isAttending ? _softGold : _deepGold,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.r),
@@ -453,7 +460,7 @@ class DetailsScreen extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: const Color(0xFFFF7BD5), size: 18.sp),
+              Icon(icon, color: _softGold, size: 18.sp),
               Flexible(
                 child: CommonText(
                   text: label,
@@ -468,6 +475,135 @@ class DetailsScreen extends StatelessWidget {
           ).paddingSymmetric(horizontal: 8.w),
         ),
       ),
+    );
+  }
+
+  Widget _buildLocationPreview() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16.r),
+        onTap: _openMapLocation,
+        child: Ink(
+          width: Get.width,
+          padding: EdgeInsets.all(14.h),
+          decoration: BoxDecoration(
+            color: _panel,
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: _gold.withValues(alpha: 0.34)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.map_outlined, color: _softGold, size: 20.sp)
+                      .paddingOnly(right: 8.w),
+                  Expanded(
+                    child: CommonText(
+                      text: 'Location',
+                      color: Colors.white,
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Icon(Icons.open_in_new, color: _softGold, size: 17.sp),
+                ],
+              ).paddingOnly(bottom: 12.h),
+              Container(
+                height: 126.h,
+                width: Get.width,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14.r),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF24211B),
+                      Color(0xFF111111),
+                      Color(0xFF2A2418),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14.r),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 18.w,
+                        right: -18.w,
+                        top: 30.h,
+                        child: _buildMapRoute(
+                          height: 18.h,
+                          color: _gold.withValues(alpha: 0.34),
+                        ),
+                      ),
+                      Positioned(
+                        left: -20.w,
+                        right: 26.w,
+                        bottom: 30.h,
+                        child: _buildMapRoute(
+                          height: 15.h,
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _MapGridPainter(
+                            lineColor: _gold.withValues(alpha: 0.18),
+                          ),
+                        ),
+                      ),
+                      Center(child: _buildMapPin()),
+                    ],
+                  ),
+                ),
+              ).paddingOnly(bottom: 12.h),
+              CommonText(
+                text: _locationText(),
+                color: AppColors.textLightColor,
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w700,
+                maxLine: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapRoute({required double height, required Color color}) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999.r),
+      ),
+    );
+  }
+
+  Widget _buildMapPin() {
+    return Container(
+      height: 48.h,
+      width: 48.h,
+      decoration: BoxDecoration(
+        color: _softGold,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.black, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.36),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Icon(Icons.location_on, color: Colors.black, size: 26.sp),
     );
   }
 
@@ -539,7 +675,7 @@ class DetailsScreen extends StatelessWidget {
             children: [
               Icon(
                 Icons.forum_outlined,
-                color: const Color(0xFFFF7BD5),
+                color: _softGold,
                 size: 22.sp,
               ).paddingOnly(right: 8.w),
               CommonText(
@@ -554,19 +690,19 @@ class DetailsScreen extends StatelessWidget {
             initials: 'J',
             name: 'Julie',
             text: "I'm excited for this!",
-            accentColor: const Color(0xFFFF4FB8),
+            accentColor: _softGold,
           ),
           _buildMockComment(
             initials: 'M',
             name: 'Matthew',
             text: 'Who else is going?',
-            accentColor: const Color(0xFF31E6A0),
+            accentColor: _gold,
           ),
           _buildMockComment(
             initials: 'A',
             name: 'Alex',
             text: "Can't wait!",
-            accentColor: const Color(0xFFB45CFF),
+            accentColor: _deepGold,
           ),
           const Spacer(),
           Container(
@@ -591,7 +727,7 @@ class DetailsScreen extends StatelessWidget {
                 ),
                 Icon(
                   Icons.send_rounded,
-                  color: const Color(0xFFFF7BD5),
+                  color: _softGold,
                   size: 18.sp,
                 ),
               ],
@@ -681,9 +817,9 @@ class DetailsScreen extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFFFF4FB8),
-                  Color(0xFFB45CFF),
-                  Color(0xFF31E6A0),
+                  _softGold,
+                  _gold,
+                  _deepGold,
                 ],
               ),
             ),
@@ -746,7 +882,7 @@ class DetailsScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: const Color(0xFFFF7BD5), size: 34.sp),
+          Icon(icon, color: _softGold, size: 34.sp),
           CommonText(
             text: title,
             color: Colors.white,
@@ -991,7 +1127,7 @@ class DetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF15151A),
                 borderRadius: BorderRadius.circular(14.r),
-                border: Border.all(color: const Color(0xFFFF7BD5)),
+                border: Border.all(color: _gold),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.34),
@@ -1005,7 +1141,7 @@ class DetailsScreen extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.calendar_month_outlined,
-                    color: const Color(0xFFFF7BD5),
+                    color: _softGold,
                     size: 20.sp,
                   ).paddingOnly(right: 10.w),
                   Expanded(
@@ -1026,5 +1162,40 @@ class DetailsScreen extends StatelessWidget {
 
     overlay.insert(entry);
     Future.delayed(const Duration(seconds: 3), entry.remove);
+  }
+}
+
+class _MapGridPainter extends CustomPainter {
+  _MapGridPainter({required this.lineColor});
+
+  final Color lineColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    for (double x = -size.width; x < size.width * 2; x += 42) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x + size.height, size.height),
+        paint,
+      );
+    }
+
+    for (double y = -size.height; y < size.height * 2; y += 38) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y - size.width * 0.45),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MapGridPainter oldDelegate) {
+    return oldDelegate.lineColor != lineColor;
   }
 }

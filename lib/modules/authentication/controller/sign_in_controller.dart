@@ -121,6 +121,11 @@ class SignInController extends GetxController {
       isAppleLoading.value = true;
       var value = await AppleSignInAuth.signInWithApple();
       if (value == null) {
+        AppSnackBar.showErrorSnackBar(
+          message: AppleSignInAuth.lastErrorMessage ??
+              'Apple sign-in could not start. Please try again.',
+          title: 'Error',
+        );
         isAppleLoading.value = false;
         return;
       }
@@ -129,31 +134,40 @@ class SignInController extends GetxController {
           .doc(value.uid)
           .get();
       if (!documentSnapshot.exists) {
-        AppPrefService.setUserUid(userToken: value.uid);
-        AppPrefService.setEmail(userEmail: value.email ?? '');
-        AppPrefService.setName(userName: value.displayName ?? '');
-        AppPrefService.setProfilePhoto(
-            userProfilePhoto: value.photoURL ?? '');
         try {
+          final List<String> nameParts = _splitDisplayName(value.displayName);
           UserModel userModel = UserModel(
-            email: value.email,
+            email: value.email ?? '',
             profilePhoto: value.photoURL,
-            firstName: value.displayName?.split(" ").first,
-            lastName: value.displayName?.split(" ").last,
+            firstName: nameParts.isNotEmpty ? nameParts.first : '',
+            lastName:
+                nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '',
           );
           await GoogleSignInAuth.createUser(
               uid: value.uid, userModel: userModel);
         } catch (e) {
           print("GoogleSignInAuth : createUser :: error : $e");
         }
+        await AppPrefService.setUserUid(userToken: value.uid);
+        await AppPrefService.setEmail(userEmail: value.email ?? '');
+        await AppPrefService.setName(userName: value.displayName ?? '');
+        await AppPrefService.setProfilePhoto(
+            userProfilePhoto: value.photoURL ?? '');
         await AuthSessionService.syncCurrentUserToPrefs();
         _openDashboardAfterSignIn();
       } else {
         await AppPrefService.setUserUid(userToken: value.uid);
+        await AppPrefService.setEmail(userEmail: value.email ?? '');
+        if ((value.displayName ?? '').trim().isNotEmpty) {
+          await AppPrefService.setName(userName: value.displayName ?? '');
+        }
+        await AppPrefService.setProfilePhoto(
+            userProfilePhoto: value.photoURL ?? '');
         await HomeScreenService.getUserData();
         await AuthSessionService.syncCurrentUserToPrefs();
         _openDashboardAfterSignIn();
       }
+      AppPreference.clearBaseOnKey("anonymous");
       isAppleLoading.value = false;
     } catch (e, st) {
       print("signIn error $e $st");
@@ -178,5 +192,13 @@ class SignInController extends GetxController {
       Routes.dashBoard,
       arg: {'initialIndex': returnTab},
     );
+  }
+
+  List<String> _splitDisplayName(String? displayName) {
+    return (displayName ?? '')
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
   }
 }

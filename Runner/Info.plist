@@ -27,6 +27,10 @@
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1039187320593-gvkbmnec3h02tsshb9upl6fkk1h2ltd7</string>
+			</array>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
@@ -54,19 +58,6 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <!-- TODO Replace this value: -->
-                <!-- Copied from GoogleService-Info.plist key REVERSED_CLIENT_ID -->
-                <string>com.googleusercontent.apps.1039187320593-gvkbmnec3h02tsshb9upl6fkk1h2ltd7</string>
-            </array>
-        </dict>
-    </array>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>This app Accesses your photo library to allow you to choose a profile image</string>
     <key>NSCameraUsageDescription</key>
