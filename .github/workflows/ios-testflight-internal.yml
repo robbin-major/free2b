@@ -1,6 +1,9 @@
 name: iOS Internal TestFlight
 
 on:
+  push:
+    branches:
+      - fix/auth-location-calendar-agenda
   workflow_dispatch:
     inputs:
       upload_testflight:
@@ -124,7 +127,7 @@ jobs:
           retention-days: 14
 
       - name: Upload to TestFlight
-        if: github.event_name == 'workflow_dispatch' && inputs.upload_testflight == true
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.upload_testflight == true)
         run: |
           IPA_PATH="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
           if [ -z "$IPA_PATH" ]; then

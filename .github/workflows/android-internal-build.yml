@@ -1,6 +1,9 @@
 name: Android Internal Build
 
 on:
+  push:
+    branches:
+      - fix/auth-location-calendar-agenda
   workflow_dispatch:
 
 permissions:
