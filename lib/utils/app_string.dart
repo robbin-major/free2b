@@ -46,6 +46,8 @@ class AppString {
   static const String pendingEvent = 'Events Attended';
   static const String calendar = 'Calendar';
   static const String bookmark = 'Bookmark';
+  static const String map = 'Map';
+  static const String messages = 'Messages';
   static const String profile = 'Profile';
   static const String searchHint = 'Search place, date etc...';
 

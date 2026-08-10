@@ -1,13 +1,9 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_template/modules/dashboard/bookmark/controller/book_mark_controller.dart';
 import 'package:flutter_template/modules/dashboard/calender/controller/celender_controller.dart';
 import 'package:flutter_template/modules/dashboard/dash_board/controller/dash_controller.dart';
-import 'package:flutter_template/modules/dashboard/profile/controller/profile_controller.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
@@ -15,13 +11,10 @@ import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:get/get.dart';
 
-import '../../../../utils/enum/common_enums.dart';
-
 class DashBoard extends StatelessWidget {
   DashBoard({super.key});
 
   final DashBoardController _dashBoardController = Get.put(DashBoardController());
-  final BookMarkController bookMarkController = Get.put(BookMarkController());
   final CalenderController calenderController = Get.put(CalenderController());
 
   // final ProfileController _profileController = Get.find();
@@ -39,8 +32,8 @@ class DashBoard extends StatelessWidget {
             currentIndex: _dashBoardController.currentIndex.value,
             unselectedItemColor: AppColors.unselectedIconColor,
             showUnselectedLabels: true,
-            selectedLabelStyle: TextStyle(fontSize: 12.sp),
-            unselectedLabelStyle: TextStyle(fontSize: 12.sp),
+            selectedLabelStyle: TextStyle(fontSize: 11.sp),
+            unselectedLabelStyle: TextStyle(fontSize: 11.sp),
             showSelectedLabels: true,
             onTap: (value) async {
               final bool wasCalendarSelected =
@@ -59,9 +52,6 @@ class DashBoard extends StatelessWidget {
                   calenderController.closeOpenEventSheet();
                 }
                 await calenderController.doGetEventData();
-              }
-              if (value == 2) {
-                await bookMarkController.getBookMark();
               }
             },
             items: [
@@ -82,17 +72,31 @@ class DashBoard extends StatelessWidget {
                 backgroundColor: AppColors.backgroundLightColor,
               ),
               BottomNavigationBarItem(
-                icon: SvgPicture.asset(
-                  IconAsset.bookMark,
-                  color: _dashBoardController.currentIndex.value == 2 ? AppColors.textColor : AppColors.unselectedIconColor,
+                icon: Icon(
+                  Icons.map_rounded,
+                  color: _dashBoardController.currentIndex.value == 2
+                      ? AppColors.yellowButtonColor
+                      : AppColors.unselectedIconColor,
+                  size: 24.sp,
                 ).paddingOnly(bottom: 6.h, top: 6.h),
-                label: AppString.bookmark.tr,
+                label: AppString.map.tr,
+                backgroundColor: AppColors.backgroundLightColor,
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  color: _dashBoardController.currentIndex.value == 3
+                      ? AppColors.textColor
+                      : AppColors.unselectedIconColor,
+                  size: 23.sp,
+                ).paddingOnly(bottom: 6.h, top: 6.h),
+                label: AppString.messages.tr,
                 backgroundColor: AppColors.backgroundLightColor,
               ),
               BottomNavigationBarItem(
                 icon: SvgPicture.asset(
                   IconAsset.profileIcon,
-                  color: _dashBoardController.currentIndex.value == 3 ? AppColors.textColor : AppColors.unselectedIconColor,
+                  color: _dashBoardController.currentIndex.value == 4 ? AppColors.textColor : AppColors.unselectedIconColor,
                 ).paddingOnly(bottom: 6.h, top: 6.h),
                 label: AppString.profile.tr,
                 backgroundColor: AppColors.backgroundLightColor,

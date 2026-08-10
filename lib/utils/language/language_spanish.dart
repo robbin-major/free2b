@@ -41,6 +41,8 @@ Map<String, String> sp = {
   AppString.pendingEvent: "Events Attended",
   AppString.calendar: "Calendario",
   AppString.bookmark: "Marcador",
+  AppString.map: "Mapa",
+  AppString.messages: "Mensajes",
   AppString.profile: "Perfil",
   AppString.searchHint: "Buscar lugar, fecha, etc...",
   AppString.tapToAddaCoverImageOfEvent: "Toca para agregar una imagen de portada del evento.",

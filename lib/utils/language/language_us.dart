@@ -40,6 +40,8 @@ Map<String, String> en = {
   AppString.pendingEvent: "Events Attended",
   AppString.calendar: "Calendar",
   AppString.bookmark: "Bookmark",
+  AppString.map: "Map",
+  AppString.messages: "Messages",
   AppString.profile: "Profile",
   AppString.searchHint: "Search place, date etc...",
   AppString.tapToAddaCoverImageOfEvent: "Tap to add a  cover image of event",
