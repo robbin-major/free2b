@@ -2,406 +2,624 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_template/modules/dashboard/home/controller/home_controller.dart';
+import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
-import 'package:flutter_template/utils/app_string.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/navigation_utils/navigation.dart';
+import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/common_text.dart';
+import 'package:flutter_template/widget/event_image.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
-class MapScreen extends StatelessWidget {
-  MapScreen({super.key});
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
 
-  final List<_MapEvent> _events = const [
-    _MapEvent(
-      title: 'House Music All Night Long',
-      category: 'Music',
-      time: 'Fri, Jul 24 - 10:00 PM',
-      neighborhood: 'Logan Square',
-      attending: '3 friends attending',
-      color: Color(0xFF24D768),
-      icon: Icons.music_note_rounded,
-      alignment: Alignment(-0.63, -0.28),
-      size: _CalloutSize.large,
-    ),
-    _MapEvent(
-      title: 'Summer Concert at Millennium Park',
-      category: 'Music',
-      time: 'Fri, Jul 24 - 1:00 PM',
-      neighborhood: 'Loop',
-      attending: 'Matthew, Julie + 4 are attending',
-      color: Color(0xFFFF5CEF),
-      icon: Icons.music_note_rounded,
-      alignment: Alignment(0.34, -0.48),
-      size: _CalloutSize.large,
-    ),
-    _MapEvent(
-      title: 'Movies in the Park',
-      category: 'Film',
-      time: 'Fri, Jul 24 - 8:30 PM',
-      neighborhood: 'Pretty in Pink',
-      attending: '8 attending',
-      color: Color(0xFF139CFF),
-      icon: Icons.videocam_rounded,
-      alignment: Alignment(0.75, 0.08),
-      size: _CalloutSize.medium,
-    ),
-    _MapEvent(
-      title: 'Teen Open Mic Night',
-      category: 'Open Mic',
-      time: 'Sat, Jul 25 - 6:00 PM',
-      neighborhood: 'West Loop',
-      attending: 'Ari + 2 attending',
-      color: Color(0xFFC455FF),
-      icon: Icons.mic_rounded,
-      alignment: Alignment(-0.27, 0.23),
-      size: _CalloutSize.medium,
-    ),
-    _MapEvent(
-      title: 'Art Workshop Create & Connect',
-      category: 'Art',
-      time: 'Sat, Jul 26 - 1:00 PM',
-      neighborhood: 'Pilsen',
-      attending: '6 attending',
-      color: Color(0xFFFF7D1A),
-      icon: Icons.palette_rounded,
-      alignment: Alignment(-0.73, 0.66),
-      size: _CalloutSize.medium,
-    ),
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> {
+  late final HomeController _homeController;
+  final TextEditingController _zipController = TextEditingController();
+  bool _isNight = true;
+  bool _showTray = true;
+  String _zipFilter = '';
+
+  static const List<Alignment> _featuredSlots = [
+    Alignment(-0.66, -0.58),
+    Alignment(0.18, -0.66),
+    Alignment(-0.58, 0.04),
+    Alignment(0.30, 0.16),
+    Alignment(-0.10, 0.62),
+  ];
+
+  static const List<Alignment> _pinSlots = [
+    Alignment(-0.24, -0.30),
+    Alignment(0.52, -0.22),
+    Alignment(-0.72, 0.42),
+    Alignment(0.56, 0.58),
+    Alignment(-0.32, 0.78),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _homeController = Get.isRegistered<HomeController>()
+        ? Get.find<HomeController>()
+        : Get.put(HomeController());
+  }
+
+  @override
+  void dispose() {
+    _zipController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final Color background =
+        _isNight ? const Color(0xFF060812) : const Color(0xFFF3F6FA);
+
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
+      backgroundColor: background,
       body: SafeArea(
         bottom: false,
         child: Stack(
           children: [
             Positioned.fill(
               child: CustomPaint(
-                painter: _ChicagoNightMapPainter(),
+                painter: _ChicagoMapPainter(isNight: _isNight),
               ),
             ),
             Positioned(
-              top: 12.h,
-              left: 16.w,
-              right: 16.w,
-              child: _TopMapControls(),
+              top: 10.h,
+              left: 14.w,
+              right: 14.w,
+              child: _MapHeader(
+                isNight: _isNight,
+                zipController: _zipController,
+                onModeChanged: (value) => setState(() => _isNight = value),
+                onZipChanged: (value) => setState(() {
+                  _zipFilter = value.trim();
+                }),
+                onClearZip: _zipFilter.isEmpty
+                    ? null
+                    : () {
+                        _zipController.clear();
+                        setState(() => _zipFilter = '');
+                      },
+              ),
             ),
             Positioned(
-              top: 72.h,
-              left: 16.w,
-              right: 16.w,
-              child: _CategoryRail(),
-            ),
-            Positioned(
-              top: 116.h,
+              top: 112.h,
               left: 0,
               right: 0,
-              bottom: 130.h,
-              child: Stack(
-                children: [
-                  for (final event in _events)
-                    Align(
-                      alignment: event.alignment,
-                      child: _EventCallout(event: event),
+              bottom: _showTray ? 162.h : 44.h,
+              child: Obx(() {
+                final List<EventModel> events = _visibleEvents();
+                final List<EventModel> featured = events.take(5).toList();
+                final List<EventModel> pins = events.skip(5).take(5).toList();
+
+                if (_homeController.isEventLoading.value &&
+                    _homeController.eventData.isEmpty) {
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: _accentColor,
+                      strokeWidth: 2.4,
                     ),
-                  const Align(
-                    alignment: Alignment(0.20, 0.72),
-                    child: _YouAreHerePin(),
-                  ),
-                  Align(
-                    alignment: const Alignment(-0.70, -0.70),
-                    child: _SmallMapPin(
-                      color: const Color(0xFFC455FF),
-                      icon: Icons.theater_comedy_rounded,
+                  );
+                }
+
+                return Stack(
+                  children: [
+                    for (int index = 0; index < pins.length; index++)
+                      Align(
+                        alignment: _pinSlots[index % _pinSlots.length],
+                        child: _SmallEventPin(
+                          color: _accentFor(index + featured.length),
+                          onTap: () => _openEvent(pins[index]),
+                        ),
+                      ),
+                    for (int index = 0; index < featured.length; index++)
+                      Align(
+                        alignment: _featuredSlots[index],
+                        child: _FeaturedEventCallout(
+                          event: featured[index],
+                          color: _accentFor(index),
+                          isNight: _isNight,
+                          onTap: () => _openEvent(featured[index]),
+                        ),
+                      ),
+                    const Align(
+                      alignment: Alignment(0.14, 0.80),
+                      child: _YouAreHerePin(),
                     ),
-                  ),
-                  Align(
-                    alignment: const Alignment(-0.42, 0.02),
-                    child: _SmallMapPin(
-                      color: const Color(0xFFC455FF),
-                      icon: Icons.music_note_rounded,
-                    ),
-                  ),
-                  Align(
-                    alignment: const Alignment(0.18, -0.18),
-                    child: _SmallMapPin(
-                      color: const Color(0xFF24D768),
-                      icon: Icons.groups_rounded,
-                    ),
-                  ),
-                  Align(
-                    alignment: const Alignment(0.55, 0.62),
-                    child: _SmallMapPin(
-                      color: const Color(0xFFC455FF),
-                      icon: Icons.theater_comedy_rounded,
-                    ),
-                  ),
-                ],
-              ),
+                    if (featured.isEmpty)
+                      _EmptyMapState(
+                        isNight: _isNight,
+                        zipFilter: _zipFilter,
+                      ),
+                  ],
+                );
+              }),
             ),
             Positioned(
               left: 14.w,
               right: 14.w,
-              bottom: 18.h,
-              child: const _TodayEventTray(),
+              bottom: 16.h,
+              child: Obx(() {
+                final List<EventModel> events = _visibleEvents();
+                if (!_showTray) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: _ShowTrayButton(
+                      count: events.length,
+                      onTap: () => setState(() => _showTray = true),
+                    ),
+                  );
+                }
+
+                return _EventTray(
+                  events: events,
+                  zipFilter: _zipFilter,
+                  onClose: () => setState(() => _showTray = false),
+                  onTapEvent: _openEvent,
+                );
+              }),
             ),
           ],
         ),
       ),
     );
   }
+
+  Color get _accentColor => const Color(0xFFFF58F3);
+
+  List<EventModel> _visibleEvents() {
+    final String filter = _normalizeZip(_zipFilter);
+    final List<EventModel> source = _homeController.eventData.toList();
+    final List<EventModel> filtered = filter.isEmpty
+        ? source
+        : source.where((event) {
+            final String eventZip = _normalizeZip(event.zipCode);
+            return eventZip.startsWith(filter) ||
+                (filter.length >= 3 &&
+                    eventZip.length >= 3 &&
+                    eventZip.substring(0, 3) == filter.substring(0, 3));
+          }).toList();
+
+    final List<EventModel> events = filter.isEmpty ? source : filtered;
+    events.sort((a, b) {
+      final DateTime? aDate = EventDateUtils.parseEventDateTime(a.startDate);
+      final DateTime? bDate = EventDateUtils.parseEventDateTime(b.startDate);
+      if (aDate == null && bDate == null) {
+        return (a.title ?? '').compareTo(b.title ?? '');
+      }
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return aDate.compareTo(bDate);
+    });
+
+    return events;
+  }
+
+  String _normalizeZip(String? value) {
+    return (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+  }
+
+  Color _accentFor(int index) {
+    const List<Color> colors = [
+      Color(0xFFFF58F3),
+      Color(0xFF2D9BFF),
+      Color(0xFF38D77D),
+      Color(0xFFFFB84E),
+      Color(0xFFC06BFF),
+    ];
+    return colors[index % colors.length];
+  }
+
+  void _openEvent(EventModel event) {
+    Navigation.pushNamed(Routes.detailsScreen, arg: event);
+  }
 }
 
-class _TopMapControls extends StatelessWidget {
+class _MapHeader extends StatelessWidget {
+  const _MapHeader({
+    required this.isNight,
+    required this.zipController,
+    required this.onModeChanged,
+    required this.onZipChanged,
+    required this.onClearZip,
+  });
+
+  final bool isNight;
+  final TextEditingController zipController;
+  final ValueChanged<bool> onModeChanged;
+  final ValueChanged<String> onZipChanged;
+  final VoidCallback? onClearZip;
+
   @override
   Widget build(BuildContext context) {
+    final Color surface =
+        isNight ? const Color(0xD90B0F18) : Colors.white.withOpacity(0.92);
+    final Color textColor = isNight ? AppColors.textColor : const Color(0xFF172033);
+    final Color muted =
+        isNight ? AppColors.textLightColor : const Color(0xFF637083);
+
     return Column(
       children: [
         Row(
           children: [
-            _RoundIconButton(icon: Icons.search_rounded),
+            _RoundIconButton(
+              icon: Icons.search_rounded,
+              isNight: isNight,
+            ),
             const Spacer(),
             CommonText(
               text: 'Free2B',
-              color: const Color(0xFFFF63F7),
-              fontSize: 26.sp,
+              color: const Color(0xFFFF58F3),
+              fontSize: 25.sp,
               fontWeight: FontWeight.w800,
             ),
             const Spacer(),
-            _RoundIconButton(icon: Icons.tune_rounded),
+            _RoundIconButton(
+              icon: Icons.tune_rounded,
+              isNight: isNight,
+            ),
           ],
+        ),
+        10.h.verticalSpace,
+        Container(
+          padding: EdgeInsets.all(6.w),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(
+              color: isNight
+                  ? Colors.white.withOpacity(0.10)
+                  : const Color(0xFFE1E6EF),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isNight ? 0.24 : 0.08),
+                blurRadius: 18.r,
+                offset: Offset(0, 8.h),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _ModePill(
+                label: 'Night',
+                icon: Icons.dark_mode_rounded,
+                selected: isNight,
+                onTap: () => onModeChanged(true),
+              ),
+              _ModePill(
+                label: 'Day',
+                icon: Icons.light_mode_rounded,
+                selected: !isNight,
+                onTap: () => onModeChanged(false),
+              ),
+              8.w.horizontalSpace,
+              Expanded(
+                child: SizedBox(
+                  height: 38.h,
+                  child: TextField(
+                    controller: zipController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 5,
+                    onChanged: onZipChanged,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      hintText: 'ZIP',
+                      hintStyle: TextStyle(
+                        color: muted,
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.location_on_outlined,
+                        color: muted,
+                        size: 17.sp,
+                      ),
+                      suffixIcon: onClearZip == null
+                          ? null
+                          : GestureDetector(
+                              onTap: onClearZip,
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: muted,
+                                size: 17.sp,
+                              ),
+                            ),
+                      filled: true,
+                      fillColor: isNight
+                          ? Colors.black.withOpacity(0.22)
+                          : const Color(0xFFF3F6FA),
+                      contentPadding: EdgeInsets.zero,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
-class _CategoryRail extends StatelessWidget {
+class _ModePill extends StatelessWidget {
+  const _ModePill({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    final List<String> labels = [
-      'All',
-      'Music',
-      'Art',
-      'Theatre',
-      'Film',
-      'Dance',
-      'More',
-    ];
-
-    return SizedBox(
-      height: 40.h,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: labels.length,
-        separatorBuilder: (_, __) => 8.w.horizontalSpace,
-        itemBuilder: (context, index) {
-          final bool selected = index == 0;
-          return Container(
-            padding: EdgeInsets.symmetric(horizontal: 17.w),
-            decoration: BoxDecoration(
-              color:
-                  selected ? const Color(0xFF5B23E5) : const Color(0xE91B1E2A),
-              borderRadius: BorderRadius.circular(22.r),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF733CFF).withOpacity(0.32),
-                        blurRadius: 16.r,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CommonText(
-                    text: labels[index],
-                    color: AppColors.textColor,
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w700,
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        height: 38.h,
+        padding: EdgeInsets.symmetric(horizontal: 11.w),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF5B23E5) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12.r),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF733CFF).withOpacity(0.30),
+                    blurRadius: 14.r,
                   ),
-                  if (labels[index] == 'More') ...[
-                    5.w.horizontalSpace,
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.textColor,
-                      size: 16.sp,
-                    ),
-                  ],
-                ],
-              ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: selected ? Colors.white : AppColors.textLightColor,
+              size: 16.sp,
             ),
-          );
-        },
+            5.w.horizontalSpace,
+            CommonText(
+              text: label,
+              color: selected ? Colors.white : AppColors.textLightColor,
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w800,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon});
+  const _RoundIconButton({required this.icon, required this.isNight});
 
   final IconData icon;
+  final bool isNight;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 42.w,
-      width: 42.w,
+      height: 40.w,
+      width: 40.w,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.34),
+        color: isNight ? Colors.black.withOpacity(0.34) : Colors.white,
         shape: BoxShape.circle,
+        border: Border.all(
+          color: isNight ? Colors.white.withOpacity(0.08) : const Color(0xFFE1E6EF),
+        ),
       ),
       child: Icon(
         icon,
-        color: AppColors.textColor,
-        size: 25.sp,
+        color: isNight ? AppColors.textColor : const Color(0xFF172033),
+        size: 23.sp,
       ),
     );
   }
 }
 
-class _EventCallout extends StatelessWidget {
-  const _EventCallout({required this.event});
+class _FeaturedEventCallout extends StatelessWidget {
+  const _FeaturedEventCallout({
+    required this.event,
+    required this.color,
+    required this.isNight,
+    required this.onTap,
+  });
 
-  final _MapEvent event;
+  final EventModel event;
+  final Color color;
+  final bool isNight;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final bool large = event.size == _CalloutSize.large;
-    final double width = large ? 178.w : 158.w;
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 136.w,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.w),
+              decoration: BoxDecoration(
+                color: isNight
+                    ? const Color(0xE80A0D14)
+                    : Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: color.withOpacity(0.88), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(isNight ? 0.34 : 0.18),
+                    blurRadius: 18.r,
+                    spreadRadius: 0.5.r,
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  EventImage(
+                    imageUrl: event.image,
+                    height: 34.w,
+                    width: 34.w,
+                    borderRadius: BorderRadius.circular(8.r),
+                  ),
+                  7.w.horizontalSpace,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CommonText(
+                          text: _eventTitle(event),
+                          color: isNight
+                              ? AppColors.textColor
+                              : const Color(0xFF172033),
+                          fontSize: 10.5.sp,
+                          fontWeight: FontWeight.w800,
+                          maxLine: 2,
+                          softWrap: true,
+                        ),
+                        4.h.verticalSpace,
+                        CommonText(
+                          text: _eventTime(event),
+                          color: isNight
+                              ? AppColors.textLightColor
+                              : const Color(0xFF637083),
+                          fontSize: 9.sp,
+                          fontWeight: FontWeight.w700,
+                          maxLine: 1,
+                          softWrap: false,
+                        ),
+                        if ((event.zipCode ?? '').trim().isNotEmpty) ...[
+                          3.h.verticalSpace,
+                          CommonText(
+                            text: event.zipCode!.trim(),
+                            color: color,
+                            fontSize: 9.sp,
+                            fontWeight: FontWeight.w800,
+                            maxLine: 1,
+                            softWrap: false,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _GlowStem(color: color),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-    return SizedBox(
-      width: width,
+class _SmallEventPin extends StatelessWidget {
+  const _SmallEventPin({
+    required this.color,
+    required this.onTap,
+  });
+
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (event.title.contains('Summer'))
-            _InitialStack(color: event.color).paddingOnly(bottom: 4.h),
           Container(
-            padding: EdgeInsets.all(12.w),
+            height: 30.w,
+            width: 30.w,
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.62),
-              borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: event.color, width: 1.3),
+              color: const Color(0xE80A0D14),
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 1.4),
               boxShadow: [
                 BoxShadow(
-                  color: event.color.withOpacity(0.45),
-                  blurRadius: 22.r,
-                  spreadRadius: 1.r,
+                  color: color.withOpacity(0.42),
+                  blurRadius: 14.r,
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(event.icon, color: event.color, size: 20.sp),
-                    8.w.horizontalSpace,
-                    Expanded(
-                      child: CommonText(
-                        text: event.title,
-                        color: AppColors.textColor,
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w800,
-                        maxLine: 2,
-                        softWrap: true,
-                      ),
-                    ),
-                  ],
-                ),
-                8.h.verticalSpace,
-                CommonText(
-                  text: event.time,
-                  color: AppColors.textLightColor,
-                  fontSize: 10.sp,
-                  fontWeight: FontWeight.w600,
-                  maxLine: 1,
-                  softWrap: false,
-                ),
-                if (large) ...[
-                  8.h.verticalSpace,
-                  CommonText(
-                    text: event.attending,
-                    color: AppColors.textColor,
-                    fontSize: 10.sp,
-                    fontWeight: FontWeight.w600,
-                    maxLine: 2,
-                    softWrap: true,
-                  ),
-                ],
-              ],
+            child: Icon(
+              Icons.place_rounded,
+              color: color,
+              size: 17.sp,
             ),
           ),
-          _GlowStem(color: event.color),
+          Container(
+            height: 18.h,
+            width: 2.w,
+            color: color.withOpacity(0.72),
+          ),
         ],
       ),
     );
   }
 }
 
-class _InitialStack extends StatelessWidget {
-  const _InitialStack({required this.color});
-
-  final Color color;
+class _YouAreHerePin extends StatelessWidget {
+  const _YouAreHerePin();
 
   @override
   Widget build(BuildContext context) {
-    final List<String> initials = ['M', 'J', 'A'];
-    return SizedBox(
-      height: 34.w,
-      width: 92.w,
-      child: Stack(
-        children: [
-          for (int index = 0; index < initials.length; index++)
-            Positioned(
-              left: index * 22.w,
-              child: Container(
-                height: 34.w,
-                width: 34.w,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF18151F),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color, width: 1.5),
-                ),
-                child: Center(
-                  child: CommonText(
-                    text: initials[index],
-                    color: AppColors.textColor,
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+    const Color color = Color(0xFF1587FF);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(18.r),
+            border: Border.all(color: Colors.white.withOpacity(0.50)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.50),
+                blurRadius: 16.r,
               ),
-            ),
-          Positioned(
-            left: 64.w,
-            child: Container(
-              height: 34.w,
-              width: 34.w,
-              decoration: BoxDecoration(
-                color: const Color(0xFF5B23E5),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.2),
-              ),
-              child: Center(
-                child: CommonText(
-                  text: '3',
-                  color: AppColors.textColor,
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
-      ),
+          child: CommonText(
+            text: 'You are here',
+            color: AppColors.textColor,
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        _GlowStem(color: color),
+      ],
     );
   }
 }
@@ -417,149 +635,55 @@ class _GlowStem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          height: 38.h,
-          width: 3.w,
+          height: 22.h,
+          width: 2.w,
           decoration: BoxDecoration(
             color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.75),
-                blurRadius: 14.r,
-                spreadRadius: 2.r,
-              ),
-            ],
-          ),
-        ),
-        Container(
-          height: 14.w,
-          width: 30.w,
-          decoration: BoxDecoration(
-            border: Border.all(color: color, width: 2),
-            borderRadius: BorderRadius.circular(50.r),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.65),
-                blurRadius: 18.r,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SmallMapPin extends StatelessWidget {
-  const _SmallMapPin({required this.color, required this.icon});
-
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          height: 38.w,
-          width: 38.w,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.48),
-            shape: BoxShape.circle,
-            border: Border.all(color: color, width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.56),
-                blurRadius: 18.r,
-                spreadRadius: 1.r,
-              ),
-            ],
-          ),
-          child: Icon(icon, color: color, size: 20.sp),
-        ),
-        _GlowStem(color: color),
-      ],
-    );
-  }
-}
-
-class _YouAreHerePin extends StatelessWidget {
-  const _YouAreHerePin();
-
-  @override
-  Widget build(BuildContext context) {
-    const Color color = Color(0xFF1587FF);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 7.h),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(18.r),
-            border: Border.all(color: Colors.white.withOpacity(0.50)),
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(0.55),
-                blurRadius: 18.r,
+                blurRadius: 10.r,
               ),
             ],
           ),
-          child: CommonText(
-            text: 'You are here',
-            color: AppColors.textColor,
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w700,
+        ),
+        Container(
+          height: 8.w,
+          width: 18.w,
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withOpacity(0.90), width: 1.5),
+            borderRadius: BorderRadius.circular(50.r),
           ),
         ),
-        _GlowStem(color: color),
       ],
     );
   }
 }
 
-class _TodayEventTray extends StatelessWidget {
-  const _TodayEventTray();
+class _EventTray extends StatelessWidget {
+  const _EventTray({
+    required this.events,
+    required this.zipFilter,
+    required this.onClose,
+    required this.onTapEvent,
+  });
+
+  final List<EventModel> events;
+  final String zipFilter;
+  final VoidCallback onClose;
+  final ValueChanged<EventModel> onTapEvent;
 
   @override
   Widget build(BuildContext context) {
-    final List<_TrayEvent> trayEvents = const [
-      _TrayEvent(
-        label: 'Concert',
-        colors: [Color(0xFF7F20FF), Color(0xFFFF4FE3)],
-        icon: Icons.music_note_rounded,
-      ),
-      _TrayEvent(
-        label: 'Murals',
-        colors: [Color(0xFF32221A), Color(0xFFFF852C)],
-        icon: Icons.brush_rounded,
-      ),
-      _TrayEvent(
-        label: 'Film',
-        colors: [Color(0xFF163B6D), Color(0xFF50B9FF)],
-        icon: Icons.movie_filter_rounded,
-      ),
-      _TrayEvent(
-        label: 'Dance',
-        colors: [Color(0xFF311322), Color(0xFFFFB04A)],
-        icon: Icons.nightlife_rounded,
-      ),
-      _TrayEvent(
-        label: 'Gallery',
-        colors: [Color(0xFF272727), Color(0xFFE4DED1)],
-        icon: Icons.museum_rounded,
-      ),
-    ];
-
     return Container(
-      padding: EdgeInsets.fromLTRB(14.w, 12.h, 14.w, 14.h),
+      padding: EdgeInsets.fromLTRB(13.w, 10.h, 13.w, 13.h),
       decoration: BoxDecoration(
         color: const Color(0xF20C0D13),
         borderRadius: BorderRadius.circular(18.r),
         border: Border.all(color: Colors.white.withOpacity(0.14)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.45),
+            color: Colors.black.withOpacity(0.42),
             blurRadius: 24.r,
             offset: Offset(0, 10.h),
           ),
@@ -572,14 +696,14 @@ class _TodayEventTray extends StatelessWidget {
           Center(
             child: Container(
               height: 4.h,
-              width: 46.w,
+              width: 42.w,
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.18),
                 borderRadius: BorderRadius.circular(99.r),
               ),
             ),
           ),
-          10.h.verticalSpace,
+          8.h.verticalSpace,
           Row(
             children: [
               Expanded(
@@ -587,77 +711,109 @@ class _TodayEventTray extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CommonText(
-                      text: 'Today - Fri, Jul 24',
+                      text: zipFilter.isEmpty
+                          ? 'Events around Chicago'
+                          : 'Events near $zipFilter',
                       color: AppColors.textColor,
-                      fontSize: 17.sp,
+                      fontSize: 16.sp,
                       fontWeight: FontWeight.w800,
                     ),
                     2.h.verticalSpace,
                     CommonText(
-                      text: '32 events around Chicago',
+                      text: events.isEmpty
+                          ? 'No events to show yet'
+                          : '${events.length} real event${events.length == 1 ? '' : 's'} available',
                       color: AppColors.textLightColor,
-                      fontSize: 13.sp,
+                      fontSize: 12.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.close_rounded,
-                color: AppColors.textLightColor,
-                size: 24.sp,
+              GestureDetector(
+                onTap: onClose,
+                child: Container(
+                  height: 32.w,
+                  width: 32.w,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.07),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textLightColor,
+                    size: 20.sp,
+                  ),
+                ),
               ),
             ],
           ),
-          12.h.verticalSpace,
+          11.h.verticalSpace,
           SizedBox(
-            height: 72.h,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: trayEvents.length,
-              separatorBuilder: (_, __) => 10.w.horizontalSpace,
-              itemBuilder: (context, index) {
-                final _TrayEvent event = trayEvents[index];
-                return Container(
-                  width: 104.w,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: event.colors,
+            height: 78.h,
+            child: events.isEmpty
+                ? Center(
+                    child: CommonText(
+                      text: 'Try another ZIP code.',
+                      color: AppColors.textLightColor,
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w700,
                     ),
-                    borderRadius: BorderRadius.circular(8.r),
-                    border: Border.all(color: Colors.white.withOpacity(0.10)),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: -8.w,
-                        top: -8.h,
-                        child: Icon(
-                          event.icon,
-                          color: Colors.white.withOpacity(0.20),
-                          size: 54.sp,
+                  )
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: math.min(events.length, 12),
+                    separatorBuilder: (_, __) => 10.w.horizontalSpace,
+                    itemBuilder: (context, index) {
+                      final EventModel event = events[index];
+                      return GestureDetector(
+                        onTap: () => onTapEvent(event),
+                        child: SizedBox(
+                          width: 118.w,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: EventImage(
+                                  imageUrl: event.image,
+                                  height: 78.h,
+                                  width: 118.w,
+                                  borderRadius: BorderRadius.circular(10.r),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10.r),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.74),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 8.w,
+                                right: 8.w,
+                                bottom: 7.h,
+                                child: CommonText(
+                                  text: _eventTitle(event),
+                                  color: AppColors.textColor,
+                                  fontSize: 10.sp,
+                                  fontWeight: FontWeight.w800,
+                                  maxLine: 2,
+                                  softWrap: true,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        left: 9.w,
-                        right: 9.w,
-                        bottom: 8.h,
-                        child: CommonText(
-                          text: event.label,
-                          color: AppColors.textColor,
-                          fontSize: 11.sp,
-                          fontWeight: FontWeight.w800,
-                          maxLine: 1,
-                          softWrap: false,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
@@ -665,318 +821,340 @@ class _TodayEventTray extends StatelessWidget {
   }
 }
 
-class _ChicagoNightMapPainter extends CustomPainter {
+class _ShowTrayButton extends StatelessWidget {
+  const _ShowTrayButton({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+        decoration: BoxDecoration(
+          color: const Color(0xF20C0D13),
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(color: Colors.white.withOpacity(0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.keyboard_arrow_up_rounded,
+              color: AppColors.textColor,
+              size: 20.sp,
+            ),
+            5.w.horizontalSpace,
+            CommonText(
+              text: '$count event${count == 1 ? '' : 's'}',
+              color: AppColors.textColor,
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w800,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyMapState extends StatelessWidget {
+  const _EmptyMapState({required this.isNight, required this.zipFilter});
+
+  final bool isNight;
+  final String zipFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 230.w,
+        padding: EdgeInsets.all(16.w),
+        decoration: BoxDecoration(
+          color: isNight ? const Color(0xE80A0D14) : Colors.white.withOpacity(0.94),
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(
+            color: isNight ? Colors.white.withOpacity(0.12) : const Color(0xFFE1E6EF),
+          ),
+        ),
+        child: CommonText(
+          text: zipFilter.isEmpty
+              ? 'No events are available on the map yet.'
+              : 'No events matched that ZIP code yet.',
+          color: isNight ? AppColors.textColor : const Color(0xFF172033),
+          fontSize: 13.sp,
+          fontWeight: FontWeight.w700,
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChicagoMapPainter extends CustomPainter {
+  const _ChicagoMapPainter({required this.isNight});
+
+  final bool isNight;
+
   @override
   void paint(Canvas canvas, Size size) {
     final Rect rect = Offset.zero & size;
-    final Paint backgroundPaint = Paint()
-      ..shader = const LinearGradient(
+    final Paint background = Paint()
+      ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [
-          Color(0xFF050712),
-          Color(0xFF0A0920),
-          Color(0xFF07090F),
-        ],
+        colors: isNight
+            ? const [
+                Color(0xFF050712),
+                Color(0xFF0A101A),
+                Color(0xFF06080D),
+              ]
+            : const [
+                Color(0xFFF5F8FC),
+                Color(0xFFEAF0F7),
+                Color(0xFFF9FBFE),
+              ],
       ).createShader(rect);
-    canvas.drawRect(rect, backgroundPaint);
+    canvas.drawRect(rect, background);
 
     _drawLake(canvas, size);
-    _drawGrid(canvas, size);
-    _drawExpressways(canvas, size);
+    _drawChicagoGrid(canvas, size);
+    _drawMainRoutes(canvas, size);
     _drawLabels(canvas, size);
-    _drawCityTitle(canvas, size);
   }
 
   void _drawLake(Canvas canvas, Size size) {
     final Path lake = Path()
-      ..moveTo(size.width * 0.70, 0)
+      ..moveTo(size.width * 0.73, 0)
       ..cubicTo(
-        size.width * 0.63,
-        size.height * 0.26,
-        size.width * 0.80,
+        size.width * 0.65,
+        size.height * 0.22,
+        size.width * 0.78,
         size.height * 0.42,
         size.width * 0.70,
-        size.height * 0.64,
+        size.height * 0.63,
       )
       ..cubicTo(
-        size.width * 0.62,
-        size.height * 0.84,
-        size.width * 0.80,
-        size.height,
+        size.width * 0.64,
+        size.height * 0.78,
+        size.width * 0.78,
+        size.height * 0.92,
         size.width * 0.74,
         size.height,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(size.width, 0)
       ..close();
-    final Paint lakePaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          Color(0x00136887),
-          Color(0xCC063D69),
-          Color(0xFF061A31),
-        ],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(lake, lakePaint);
 
-    final TextPainter lakeLabel = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-      text: TextSpan(
-        text: 'Lake\nMichigan\n~~~~',
-        style: TextStyle(
-          color: const Color(0xFF2EA7FF).withOpacity(0.86),
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          height: 1.25,
-        ),
-      ),
-    )..layout(maxWidth: 120);
-    lakeLabel.paint(
+    canvas.drawPath(
+      lake,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: isNight
+              ? const [
+                  Color(0x00136887),
+                  Color(0xAA08385B),
+                  Color(0xFF061A31),
+                ]
+              : const [
+                  Color(0x332E9BEF),
+                  Color(0xFFBFE3FF),
+                  Color(0xFFE6F5FF),
+                ],
+        ).createShader(Offset.zero & size),
+    );
+
+    _drawText(
       canvas,
-      Offset(size.width * 0.78, size.height * 0.30),
+      'Lake\nMichigan',
+      Offset(size.width * 0.80, size.height * 0.32),
+      color: isNight ? const Color(0xFF47AFFF) : const Color(0xFF2E75B8),
+      fontSize: 14,
+      weight: FontWeight.w800,
+      align: TextAlign.center,
     );
   }
 
-  void _drawGrid(Canvas canvas, Size size) {
+  void _drawChicagoGrid(Canvas canvas, Size size) {
     final Paint minor = Paint()
-      ..color = const Color(0xFF7A28FF).withOpacity(0.18)
-      ..strokeWidth = 0.8;
+      ..color = (isNight ? const Color(0xFF8795A8) : const Color(0xFF9EACBA))
+          .withOpacity(isNight ? 0.15 : 0.34)
+      ..strokeWidth = 0.75;
     final Paint major = Paint()
-      ..color = const Color(0xFFFF4EF1).withOpacity(0.42)
-      ..strokeWidth = 1.15;
-    final Paint cyan = Paint()
-      ..color = const Color(0xFF1D8CFF).withOpacity(0.28)
-      ..strokeWidth = 1;
+      ..color = (isNight ? const Color(0xFFFF58F3) : const Color(0xFF59718C))
+          .withOpacity(isNight ? 0.25 : 0.42)
+      ..strokeWidth = 1.0;
 
-    for (double x = -size.width * 0.20;
-        x < size.width * 0.78;
-        x += size.width * 0.055) {
+    final double left = size.width * 0.03;
+    final double right = size.width * 0.72;
+    final double top = size.height * 0.13;
+    final double bottom = size.height * 0.95;
+
+    for (int i = 0; i < 15; i++) {
+      final double x = left + (right - left) * i / 14;
       canvas.drawLine(
-        Offset(x, size.height * 0.13),
-        Offset(x + size.width * 0.26, size.height),
-        minor,
+        Offset(x, top),
+        Offset(x + size.width * 0.08, bottom),
+        i % 4 == 0 ? major : minor,
       );
     }
 
-    for (double y = size.height * 0.17;
-        y < size.height;
-        y += size.height * 0.035) {
+    for (int i = 0; i < 22; i++) {
+      final double y = top + (bottom - top) * i / 21;
       canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width * 0.76, y + size.height * 0.04),
-        y % (size.height * 0.14) < 1 ? major : minor,
+        Offset(left, y),
+        Offset(right, y - size.height * 0.035),
+        i % 5 == 0 ? major : minor,
       );
-    }
-
-    for (double y = size.height * 0.20;
-        y < size.height;
-        y += size.height * 0.12) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width * 0.72, y - size.height * 0.06),
-        cyan,
-      );
-    }
-
-    final Paint dots = Paint()..color = const Color(0xFFFF8747).withOpacity(0.55);
-    for (int index = 0; index < 120; index++) {
-      final double x =
-          ((index * 37) % 100) / 100 * size.width * 0.72 + size.width * 0.02;
-      final double y =
-          size.height * 0.18 + ((index * 53) % 100) / 100 * size.height * 0.72;
-      canvas.drawCircle(Offset(x, y), 0.8, dots);
     }
   }
 
-  void _drawExpressways(Canvas canvas, Size size) {
-    final Paint pinkRoad = Paint()
-      ..color = const Color(0xFFFF4EF1).withOpacity(0.64)
+  void _drawMainRoutes(Canvas canvas, Size size) {
+    final Paint routeBlue = Paint()
+      ..color = (isNight ? const Color(0xFF2D9BFF) : const Color(0xFF387DBF))
+          .withOpacity(isNight ? 0.72 : 0.58)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 2.1
       ..strokeCap = StrokeCap.round;
-    final Paint blueRoad = Paint()
-      ..color = const Color(0xFF168BFF).withOpacity(0.80)
+    final Paint routeMagenta = Paint()
+      ..color = (isNight ? const Color(0xFFFF58F3) : const Color(0xFF8B6EA8))
+          .withOpacity(isNight ? 0.55 : 0.44)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 1.8
       ..strokeCap = StrokeCap.round;
 
     final Path lakeShore = Path()
-      ..moveTo(size.width * 0.73, size.height * 0.05)
+      ..moveTo(size.width * 0.72, size.height * 0.08)
       ..cubicTo(
-        size.width * 0.62,
-        size.height * 0.32,
-        size.width * 0.78,
+        size.width * 0.64,
+        size.height * 0.30,
+        size.width * 0.75,
         size.height * 0.52,
-        size.width * 0.69,
-        size.height * 0.94,
+        size.width * 0.68,
+        size.height * 0.92,
       );
-    canvas.drawPath(lakeShore, blueRoad);
+    canvas.drawPath(lakeShore, routeBlue);
 
-    final Path westRoad = Path()
-      ..moveTo(size.width * 0.05, size.height * 0.18)
+    final Path westRoute = Path()
+      ..moveTo(size.width * 0.12, size.height * 0.18)
       ..cubicTo(
+        size.width * 0.23,
+        size.height * 0.36,
         size.width * 0.22,
-        size.height * 0.34,
-        size.width * 0.18,
-        size.height * 0.55,
-        size.width * 0.30,
-        size.height * 0.78,
+        size.height * 0.58,
+        size.width * 0.35,
+        size.height * 0.84,
       );
-    canvas.drawPath(westRoad, pinkRoad);
+    canvas.drawPath(westRoute, routeMagenta);
 
-    final Path centerRoad = Path()
-      ..moveTo(size.width * 0.36, size.height * 0.10)
+    final Path centerRoute = Path()
+      ..moveTo(size.width * 0.45, size.height * 0.12)
       ..cubicTo(
+        size.width * 0.50,
+        size.height * 0.36,
         size.width * 0.45,
-        size.height * 0.35,
-        size.width * 0.42,
         size.height * 0.60,
-        size.width * 0.55,
-        size.height * 0.94,
+        size.width * 0.57,
+        size.height * 0.90,
       );
-    canvas.drawPath(centerRoad, pinkRoad);
+    canvas.drawPath(centerRoute, routeMagenta);
   }
 
   void _drawLabels(Canvas canvas, Size size) {
-    final TextPainter painter = TextPainter(textDirection: TextDirection.ltr);
-    _drawLabel(canvas, painter, 'LINCOLN\nPARK',
-        Offset(size.width * 0.39, size.height * 0.20));
-    _drawLabel(canvas, painter, 'WICKER\nPARK',
-        Offset(size.width * 0.42, size.height * 0.34));
-    _drawLabel(canvas, painter, 'LOGAN\nSQUARE',
-        Offset(size.width * 0.05, size.height * 0.43));
-    _drawLabel(canvas, painter, 'WEST\nLOOP',
-        Offset(size.width * 0.35, size.height * 0.65));
-    _drawLabel(canvas, painter, 'SOUTH\nLOOP',
-        Offset(size.width * 0.58, size.height * 0.61));
-    _drawLabel(canvas, painter, 'HYDE PARK',
-        Offset(size.width * 0.65, size.height * 0.77));
-
-    _drawShield(canvas, '90/94', Offset(size.width * 0.27, size.height * 0.28));
-    _drawShield(canvas, '55', Offset(size.width * 0.06, size.height * 0.58));
+    final Color neighborhood =
+        isNight ? const Color(0xFFFF8DF7) : const Color(0xFF445466);
+    _drawText(
+      canvas,
+      'CHICAGO',
+      Offset(size.width * 0.34, size.height * 0.46),
+      color: neighborhood.withOpacity(isNight ? 0.42 : 0.38),
+      fontSize: 30,
+      weight: FontWeight.w900,
+    );
+    _drawText(
+      canvas,
+      'Lincoln Park',
+      Offset(size.width * 0.42, size.height * 0.20),
+      color: neighborhood,
+    );
+    _drawText(
+      canvas,
+      'Wicker Park',
+      Offset(size.width * 0.31, size.height * 0.34),
+      color: neighborhood,
+    );
+    _drawText(
+      canvas,
+      'West Loop',
+      Offset(size.width * 0.34, size.height * 0.61),
+      color: neighborhood,
+    );
+    _drawText(
+      canvas,
+      'South Loop',
+      Offset(size.width * 0.54, size.height * 0.68),
+      color: neighborhood,
+    );
+    _drawText(
+      canvas,
+      'Hyde Park',
+      Offset(size.width * 0.50, size.height * 0.84),
+      color: neighborhood,
+    );
   }
 
-  void _drawLabel(
+  void _drawText(
     Canvas canvas,
-    TextPainter painter,
     String text,
-    Offset offset,
-  ) {
-    painter.text = TextSpan(
-      text: text,
-      style: TextStyle(
-        color: const Color(0xFFFF64F3).withOpacity(0.72),
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        height: 1.05,
+    Offset offset, {
+    required Color color,
+    double fontSize = 10,
+    FontWeight weight = FontWeight.w800,
+    TextAlign align = TextAlign.left,
+  }) {
+    final TextPainter painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: align,
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color.withOpacity(isNight ? 0.76 : 0.88),
+          fontSize: fontSize,
+          fontWeight: weight,
+          letterSpacing: 0,
+          shadows: isNight
+              ? [
+                  Shadow(
+                    color: color.withOpacity(0.36),
+                    blurRadius: 8,
+                  ),
+                ]
+              : null,
+        ),
       ),
-    );
-    painter.layout();
+    )..layout(maxWidth: 140);
     painter.paint(canvas, offset);
   }
 
-  void _drawShield(Canvas canvas, String label, Offset center) {
-    final RRect rect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: center, width: 42, height: 26),
-      const Radius.circular(12),
-    );
-    canvas.drawRRect(
-      rect,
-      Paint()..color = const Color(0xFF173B8F).withOpacity(0.85),
-    );
-    canvas.drawRRect(
-      rect,
-      Paint()
-        ..color = Colors.white.withOpacity(0.80)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4,
-    );
-    final TextPainter painter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-      text: TextSpan(
-        text: label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    )..layout(maxWidth: 42);
-    painter.paint(
-      canvas,
-      center - Offset(painter.width / 2, painter.height / 2),
-    );
-  }
-
-  void _drawCityTitle(Canvas canvas, Size size) {
-    final TextPainter painter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.center,
-      text: TextSpan(
-        text: 'CHICAGO',
-        style: TextStyle(
-          color: const Color(0xFFFF5CEF).withOpacity(0.86),
-          fontSize: 40,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0,
-          shadows: [
-            Shadow(
-              color: const Color(0xFFFF5CEF).withOpacity(0.65),
-              blurRadius: 18,
-            ),
-          ],
-        ),
-      ),
-    )..layout(maxWidth: size.width);
-    painter.paint(
-      canvas,
-      Offset(size.width * 0.50 - painter.width / 2, size.height * 0.47),
-    );
-  }
-
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ChicagoMapPainter oldDelegate) {
+    return oldDelegate.isNight != isNight;
+  }
 }
 
-class _MapEvent {
-  const _MapEvent({
-    required this.title,
-    required this.category,
-    required this.time,
-    required this.neighborhood,
-    required this.attending,
-    required this.color,
-    required this.icon,
-    required this.alignment,
-    required this.size,
-  });
-
-  final String title;
-  final String category;
-  final String time;
-  final String neighborhood;
-  final String attending;
-  final Color color;
-  final IconData icon;
-  final Alignment alignment;
-  final _CalloutSize size;
+String _eventTitle(EventModel event) {
+  final String title = (event.title ?? '').trim();
+  return title.isEmpty ? 'Free2B event' : title;
 }
 
-class _TrayEvent {
-  const _TrayEvent({
-    required this.label,
-    required this.colors,
-    required this.icon,
-  });
-
-  final String label;
-  final List<Color> colors;
-  final IconData icon;
+String _eventTime(EventModel event) {
+  final DateTime? parsed = EventDateUtils.parseEventDateTime(event.startDate);
+  if (parsed == null) {
+    return 'Time coming soon';
+  }
+  return DateFormat('EEE, MMM d - h:mm a').format(parsed);
 }
-
-enum _CalloutSize { medium, large }
