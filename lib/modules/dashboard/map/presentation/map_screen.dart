@@ -11,7 +11,7 @@ import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/event_image.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
