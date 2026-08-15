@@ -1288,7 +1288,7 @@ String _eventTime(EventModel event) {
 }
 
 String _eventLocation(EventModel event) {
-  final List<String> parts = <String>[
+  final List<String> parts = <String?>[
     event.address,
     event.city,
     event.state,

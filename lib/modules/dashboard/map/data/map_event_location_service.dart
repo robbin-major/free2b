@@ -133,7 +133,7 @@ class MapEventLocationService {
   }
 
   String _eventLocationQuery(EventModel event) {
-    final List<String> parts = <String>[
+    final List<String> parts = <String?>[
       event.address,
       event.aptSuiteOther,
       event.city,
