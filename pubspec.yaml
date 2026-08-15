@@ -75,6 +75,7 @@ dependencies:
   url_launcher:
   geocoding: ^4.0.0
   geolocator: ^9.0.2
+  google_maps_flutter: 2.14.0
   share_plus: ^11.0.0
 
 #  country_state_city_pro:

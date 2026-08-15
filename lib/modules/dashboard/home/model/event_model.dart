@@ -24,6 +24,8 @@ class EventModel {
   final String? eventID;
   final List<Category>? category;
   final String? categoryType;
+  final double? latitude;
+  final double? longitude;
 
   EventModel({
     this.image,
@@ -43,14 +45,18 @@ class EventModel {
     this.eventID,
     this.category,
     this.categoryType,
+    this.latitude,
+    this.longitude,
   });
 
   @override
   EventModel copy() =>
       EventModel(
         image: image,
-        country: uid,
+        country: country,
+        uid: uid,
         address: address,
+        city: city,
         description: description,
         state: state,
         title: title,
@@ -63,6 +69,8 @@ class EventModel {
         zipCode: zipCode,
         category: category,
         categoryType: categoryType,
+        latitude: latitude,
+        longitude: longitude,
       );
 
   @override
@@ -83,7 +91,9 @@ class EventModel {
     String? eventID,
     List<Category>? category,
     String? categoryType,
-    String? zipCode}) =>
+    String? zipCode,
+    double? latitude,
+    double? longitude}) =>
       EventModel(
         country: country ?? this.country,
         uid: uid ?? this.uid,
@@ -102,6 +112,8 @@ class EventModel {
         zipCode: zipCode ?? this.zipCode,
         category: category ?? this.category,
         categoryType: categoryType ?? this.categoryType,
+        latitude: latitude ?? this.latitude,
+        longitude: longitude ?? this.longitude,
       );
 
   factory EventModel.fromJson(Map<String, dynamic> json) =>
@@ -129,6 +141,8 @@ class EventModel {
 
         zipCode: json["zipCode"],
         categoryType: json["categoryType"],
+        latitude: _readLatitude(json),
+        longitude: _readLongitude(json),
       );
 
   Map<String, dynamic> toJson() =>
@@ -153,7 +167,72 @@ class EventModel {
             : List<dynamic>.from(category?.map((x) => x.toJson()) ?? []),
         "zipCode": zipCode ?? '',
         "categoryType": categoryType ?? '',
+        "latitude": latitude,
+        "longitude": longitude,
       };
+}
+
+double? _readLatitude(Map<String, dynamic> json) {
+  return _readCoordinate(json, const [
+        'latitude',
+        'lat',
+        'eventLatitude',
+        'locationLatitude',
+      ]) ??
+      _readCoordinateProperty(json['location'], 'latitude') ??
+      _readCoordinateProperty(json['coordinates'], 'latitude') ??
+      _readCoordinateProperty(json['geoPoint'], 'latitude');
+}
+
+double? _readLongitude(Map<String, dynamic> json) {
+  return _readCoordinate(json, const [
+        'longitude',
+        'lng',
+        'lon',
+        'eventLongitude',
+        'locationLongitude',
+      ]) ??
+      _readCoordinateProperty(json['location'], 'longitude') ??
+      _readCoordinateProperty(json['coordinates'], 'longitude') ??
+      _readCoordinateProperty(json['geoPoint'], 'longitude');
+}
+
+double? _readCoordinate(Map<String, dynamic> json, List<String> keys) {
+  for (final String key in keys) {
+    final double? value = _asDouble(json[key]);
+    if (value != null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+double? _readCoordinateProperty(Object? value, String property) {
+  if (value is Map<String, dynamic>) {
+    return _asDouble(value[property]) ??
+        _asDouble(value[property == 'latitude' ? 'lat' : 'lng']);
+  }
+
+  try {
+    final dynamic dynamicValue = value;
+    return _asDouble(
+      property == 'latitude'
+          ? dynamicValue?.latitude
+          : dynamicValue?.longitude,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+double? _asDouble(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value.trim());
+  }
+  return null;
 }
 
 class Category {

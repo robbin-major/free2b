@@ -1,16 +1,22 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_template/modules/dashboard/home/controller/home_controller.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
+import 'package:flutter_template/modules/dashboard/map/data/map_event_location_service.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/location_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/event_image.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 class MapScreen extends StatefulWidget {
@@ -21,27 +27,35 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  static const LatLng _defaultCenter = LatLng(41.8781, -87.6298);
+  static const CameraPosition _defaultCamera = CameraPosition(
+    target: _defaultCenter,
+    zoom: 11.6,
+  );
+  static const ClusterManagerId _eventClusterId =
+      ClusterManagerId('free2b_events');
+
   late final HomeController _homeController;
+  late final ClusterManager _eventClusterManager;
+  final MapEventLocationService _locationService = MapEventLocationService();
   final TextEditingController _zipController = TextEditingController();
+  final FocusNode _zipFocusNode = FocusNode();
+
+  GoogleMapController? _mapController;
+  Worker? _eventWorker;
+  Timer? _zipDebounce;
   bool _isNight = true;
-  bool _showTray = true;
+  bool _isTrayExpanded = false;
+  bool _isResolvingLocations = false;
+  bool _isZipLoading = false;
+  bool _isLocating = false;
   String _zipFilter = '';
-
-  static const List<Alignment> _featuredSlots = [
-    Alignment(-0.66, -0.58),
-    Alignment(0.18, -0.66),
-    Alignment(-0.58, 0.04),
-    Alignment(0.30, 0.16),
-    Alignment(-0.10, 0.62),
-  ];
-
-  static const List<Alignment> _pinSlots = [
-    Alignment(-0.24, -0.30),
-    Alignment(0.52, -0.22),
-    Alignment(-0.72, 0.42),
-    Alignment(0.56, 0.58),
-    Alignment(-0.32, 0.78),
-  ];
+  String? _mapMessage;
+  String? _locationMessage;
+  Position? _userPosition;
+  EventModel? _selectedEvent;
+  List<MapEventLocation> _resolvedEvents = <MapEventLocation>[];
+  Set<Marker> _markers = <Marker>{};
 
   @override
   void initState() {
@@ -49,28 +63,49 @@ class _MapScreenState extends State<MapScreen> {
     _homeController = Get.isRegistered<HomeController>()
         ? Get.find<HomeController>()
         : Get.put(HomeController());
+    _eventClusterManager = ClusterManager(
+      clusterManagerId: _eventClusterId,
+      onClusterTap: _onClusterTap,
+    );
+    _resolveVisibleEventLocations();
+    _eventWorker = ever<List<EventModel>>(_homeController.eventData, (_) {
+      _resolveVisibleEventLocations();
+    });
   }
 
   @override
   void dispose() {
+    _zipDebounce?.cancel();
+    _eventWorker?.dispose();
     _zipController.dispose();
+    _zipFocusNode.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color background =
-        _isNight ? const Color(0xFF060812) : const Color(0xFFF3F6FA);
+    final List<MapEventLocation> visibleEvents = _visibleEventLocations();
 
     return Scaffold(
-      backgroundColor: background,
+      backgroundColor: _isNight ? const Color(0xFF060812) : const Color(0xFFF3F6FA),
       body: SafeArea(
         bottom: false,
         child: Stack(
           children: [
             Positioned.fill(
-              child: CustomPaint(
-                painter: _ChicagoMapPainter(isNight: _isNight),
+              child: GoogleMap(
+                initialCameraPosition: _defaultCamera,
+                mapType: MapType.normal,
+                markers: _markers,
+                clusterManagers: {_eventClusterManager},
+                myLocationEnabled: _userPosition != null,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                compassEnabled: true,
+                mapToolbarEnabled: false,
+                onMapCreated: _onMapCreated,
+                onTap: (_) => _clearSelectedEvent(),
               ),
             ),
             Positioned(
@@ -80,94 +115,108 @@ class _MapScreenState extends State<MapScreen> {
               child: _MapHeader(
                 isNight: _isNight,
                 zipController: _zipController,
-                onModeChanged: (value) => setState(() => _isNight = value),
-                onZipChanged: (value) => setState(() {
-                  _zipFilter = value.trim();
-                }),
-                onClearZip: _zipFilter.isEmpty
+                zipFocusNode: _zipFocusNode,
+                isZipLoading: _isZipLoading,
+                onModeChanged: _changeMapMode,
+                onZipChanged: _onZipChanged,
+                onZipSubmitted: _applyZipSearch,
+                onSearchTap: () => _zipFocusNode.requestFocus(),
+                onFilterTap: () => setState(() => _isTrayExpanded = true),
+                onClearZip: _zipFilter.isEmpty && _zipController.text.isEmpty
                     ? null
-                    : () {
-                        _zipController.clear();
-                        setState(() => _zipFilter = '');
-                      },
+                    : _clearZipSearch,
               ),
             ),
             Positioned(
-              top: 112.h,
-              left: 0,
-              right: 0,
-              bottom: _showTray ? 162.h : 44.h,
-              child: Obx(() {
-                final List<EventModel> events = _visibleEvents();
-                final List<EventModel> featured = events.take(5).toList();
-                final List<EventModel> pins = events.skip(5).take(5).toList();
-
-                if (_homeController.isEventLoading.value &&
-                    _homeController.eventData.isEmpty) {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      color: _accentColor,
-                      strokeWidth: 2.4,
-                    ),
-                  );
-                }
-
-                return Stack(
-                  children: [
-                    for (int index = 0; index < pins.length; index++)
-                      Align(
-                        alignment: _pinSlots[index % _pinSlots.length],
-                        child: _SmallEventPin(
-                          color: _accentFor(index + featured.length),
-                          onTap: () => _openEvent(pins[index]),
-                        ),
-                      ),
-                    for (int index = 0; index < featured.length; index++)
-                      Align(
-                        alignment: _featuredSlots[index],
-                        child: _FeaturedEventCallout(
-                          event: featured[index],
-                          color: _accentFor(index),
-                          isNight: _isNight,
-                          onTap: () => _openEvent(featured[index]),
-                        ),
-                      ),
-                    const Align(
-                      alignment: Alignment(0.14, 0.80),
-                      child: _YouAreHerePin(),
-                    ),
-                    if (featured.isEmpty)
-                      _EmptyMapState(
-                        isNight: _isNight,
-                        zipFilter: _zipFilter,
-                      ),
-                  ],
-                );
-              }),
+              top: 126.h,
+              right: 14.w,
+              child: Column(
+                children: [
+                  _MapFloatingButton(
+                    icon: Icons.my_location_rounded,
+                    tooltip: 'Recenter',
+                    isNight: _isNight,
+                    isLoading: _isLocating,
+                    onTap: _recenterToUser,
+                  ),
+                  10.h.verticalSpace,
+                  _MapFloatingButton(
+                    icon: Icons.layers_rounded,
+                    tooltip: _isNight ? 'Day map' : 'Night map',
+                    isNight: _isNight,
+                    onTap: () => _changeMapMode(!_isNight),
+                  ),
+                ],
+              ),
+            ),
+            if (_isResolvingLocations || _homeController.isEventLoading.value)
+              Positioned(
+                top: 128.h,
+                left: 14.w,
+                child: _MapStatusPill(
+                  text: 'Loading map events',
+                  isNight: _isNight,
+                  showSpinner: true,
+                ),
+              ),
+            if (_mapMessage != null || _locationMessage != null)
+              Positioned(
+                top: 128.h,
+                left: 14.w,
+                right: 72.w,
+                child: _MapMessageCard(
+                  message: _locationMessage ?? _mapMessage!,
+                  isNight: _isNight,
+                  onClose: () => setState(() {
+                    _mapMessage = null;
+                    _locationMessage = null;
+                  }),
+                ),
+              ),
+            if (_selectedEvent != null)
+              Positioned(
+                left: 14.w,
+                right: 14.w,
+                bottom: _isTrayExpanded ? 248.h : 104.h,
+                child: _SelectedEventCard(
+                  event: _selectedEvent!,
+                  isNight: _isNight,
+                  onTap: () => _openEvent(_selectedEvent!),
+                  onClose: _clearSelectedEvent,
+                ),
+              ),
+            if (visibleEvents.isEmpty &&
+                !_isResolvingLocations &&
+                !_homeController.isEventLoading.value)
+              Center(
+                child: _EmptyMapState(
+                  isNight: _isNight,
+                  zipFilter: _zipFilter,
+                ),
+              ),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_isTrayExpanded,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: _isTrayExpanded ? 1 : 0,
+                  child: Container(color: Colors.black.withOpacity(0.20)),
+                ),
+              ),
             ),
             Positioned(
-              left: 14.w,
-              right: 14.w,
-              bottom: 16.h,
-              child: Obx(() {
-                final List<EventModel> events = _visibleEvents();
-                if (!_showTray) {
-                  return Align(
-                    alignment: Alignment.centerRight,
-                    child: _ShowTrayButton(
-                      count: events.length,
-                      onTap: () => setState(() => _showTray = true),
-                    ),
-                  );
-                }
-
-                return _EventTray(
-                  events: events,
-                  zipFilter: _zipFilter,
-                  onClose: () => setState(() => _showTray = false),
-                  onTapEvent: _openEvent,
-                );
-              }),
+              left: 0,
+              right: 0,
+              bottom: 8.h,
+              child: _EventTray(
+                events: visibleEvents.map((item) => item.event).toList(),
+                zipFilter: _zipFilter,
+                isExpanded: _isTrayExpanded,
+                onToggleExpanded: () {
+                  setState(() => _isTrayExpanded = !_isTrayExpanded);
+                },
+                onTapEvent: _openEvent,
+              ),
             ),
           ],
         ),
@@ -175,27 +224,71 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Color get _accentColor => const Color(0xFFFF58F3);
+  Future<void> _onMapCreated(GoogleMapController controller) async {
+    _mapController = controller;
+    await _applyMapStyle();
+    await _fitMapToVisibleEvents();
+  }
 
-  List<EventModel> _visibleEvents() {
-    final String filter = _normalizeZip(_zipFilter);
-    final List<EventModel> source = _homeController.eventData.toList();
-    final List<EventModel> filtered = filter.isEmpty
-        ? source
-        : source.where((event) {
-            final String eventZip = _normalizeZip(event.zipCode);
-            return eventZip.startsWith(filter) ||
-                (filter.length >= 3 &&
-                    eventZip.length >= 3 &&
+  Future<void> _changeMapMode(bool isNight) async {
+    setState(() => _isNight = isNight);
+    await _applyMapStyle();
+  }
+
+  Future<void> _applyMapStyle() async {
+    final GoogleMapController? controller = _mapController;
+    if (controller == null) {
+      return;
+    }
+    await controller.setMapStyle(_isNight ? _nightMapStyle : _dayMapStyle);
+  }
+
+  Future<void> _resolveVisibleEventLocations() async {
+    setState(() {
+      _isResolvingLocations = true;
+      _mapMessage = null;
+    });
+
+    final List<EventModel> events = _homeController.eventData.toList();
+    final List<MapEventLocation> resolved =
+        await _locationService.resolveEventLocations(events);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _resolvedEvents = resolved;
+      _isResolvingLocations = false;
+      _markers = _buildMarkers(_visibleEventLocations());
+      if (events.isNotEmpty && resolved.isEmpty) {
+        _mapMessage =
+            'Events loaded, but none have usable coordinates or geocodable locations yet.';
+      }
+    });
+    await _fitMapToVisibleEvents();
+  }
+
+  List<MapEventLocation> _visibleEventLocations() {
+    final String filter = _locationService.normalizeZip(_zipFilter);
+    final List<MapEventLocation> events = filter.isEmpty
+        ? _resolvedEvents
+        : _resolvedEvents.where((item) {
+            final String eventZip =
+                _locationService.normalizeZip(item.event.zipCode);
+            return eventZip == filter ||
+                (eventZip.length >= 3 &&
+                    filter.length >= 3 &&
                     eventZip.substring(0, 3) == filter.substring(0, 3));
           }).toList();
 
-    final List<EventModel> events = filter.isEmpty ? source : filtered;
     events.sort((a, b) {
-      final DateTime? aDate = EventDateUtils.parseEventDateTime(a.startDate);
-      final DateTime? bDate = EventDateUtils.parseEventDateTime(b.startDate);
+      final DateTime? aDate =
+          EventDateUtils.parseEventDateTime(a.event.startDate);
+      final DateTime? bDate =
+          EventDateUtils.parseEventDateTime(b.event.startDate);
       if (aDate == null && bDate == null) {
-        return (a.title ?? '').compareTo(b.title ?? '');
+        return _eventTitle(a.event).compareTo(_eventTitle(b.event));
       }
       if (aDate == null) return 1;
       if (bDate == null) return -1;
@@ -205,19 +298,227 @@ class _MapScreenState extends State<MapScreen> {
     return events;
   }
 
-  String _normalizeZip(String? value) {
-    return (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+  Set<Marker> _buildMarkers(List<MapEventLocation> locations) {
+    return locations.map((MapEventLocation item) {
+      final bool selected = _selectedEvent?.eventID == item.event.eventID &&
+          (item.event.eventID ?? '').isNotEmpty;
+      return Marker(
+        markerId: MarkerId(_markerIdFor(item.event)),
+        position: item.position,
+        clusterManagerId: _eventClusterId,
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          selected ? BitmapDescriptor.hueRose : BitmapDescriptor.hueViolet,
+        ),
+        infoWindow: InfoWindow.noText,
+        onTap: () => _selectEvent(item),
+      );
+    }).toSet();
   }
 
-  Color _accentFor(int index) {
-    const List<Color> colors = [
-      Color(0xFFFF58F3),
-      Color(0xFF2D9BFF),
-      Color(0xFF38D77D),
-      Color(0xFFFFB84E),
-      Color(0xFFC06BFF),
-    ];
-    return colors[index % colors.length];
+  Future<void> _selectEvent(MapEventLocation item) async {
+    setState(() {
+      _selectedEvent = item.event;
+      _markers = _buildMarkers(_visibleEventLocations());
+    });
+    await _mapController?.animateCamera(
+      CameraUpdate.newLatLng(item.position),
+    );
+  }
+
+  void _clearSelectedEvent() {
+    setState(() {
+      _selectedEvent = null;
+      _markers = _buildMarkers(_visibleEventLocations());
+    });
+  }
+
+  Future<void> _onClusterTap(Cluster cluster) async {
+    await _mapController?.animateCamera(
+      CameraUpdate.newLatLngBounds(cluster.bounds, 72.w),
+    );
+  }
+
+  void _onZipChanged(String value) {
+    _zipDebounce?.cancel();
+    final String normalized = _locationService.normalizeZip(value);
+    setState(() {
+      _zipFilter = normalized;
+      _selectedEvent = null;
+      _mapMessage = null;
+      _markers = _buildMarkers(_visibleEventLocations());
+    });
+
+    if (normalized.length == 5) {
+      _zipDebounce = Timer(const Duration(milliseconds: 450), () {
+        _applyZipSearch(normalized);
+      });
+    } else if (normalized.isNotEmpty) {
+      setState(() {
+        _mapMessage = 'Enter a 5-digit US ZIP code.';
+      });
+    }
+  }
+
+  Future<void> _applyZipSearch(String value) async {
+    final String zipCode = _locationService.normalizeZip(value);
+    setState(() {
+      _zipFilter = zipCode;
+      _isZipLoading = true;
+      _selectedEvent = null;
+      _mapMessage = null;
+      _markers = _buildMarkers(_visibleEventLocations());
+    });
+
+    final ZipLookupResult result =
+        await _locationService.resolveZipCode(zipCode);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isZipLoading = false;
+      switch (result.status) {
+        case ZipLookupStatus.empty:
+          _mapMessage = null;
+          break;
+        case ZipLookupStatus.invalid:
+        case ZipLookupStatus.notFound:
+        case ZipLookupStatus.error:
+          _mapMessage = result.message;
+          break;
+        case ZipLookupStatus.found:
+          _mapMessage = null;
+          break;
+      }
+    });
+
+    if (result.position != null) {
+      await _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: result.position!, zoom: 12.4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _clearZipSearch() async {
+    _zipDebounce?.cancel();
+    _zipController.clear();
+    setState(() {
+      _zipFilter = '';
+      _selectedEvent = null;
+      _mapMessage = null;
+      _markers = _buildMarkers(_visibleEventLocations());
+    });
+    await _fitMapToVisibleEvents();
+  }
+
+  Future<void> _recenterToUser() async {
+    setState(() {
+      _isLocating = true;
+      _locationMessage = null;
+    });
+
+    final AppLocationLookupResult result =
+        await AppLocationService.getCurrentLocationIfAllowed();
+    if (!mounted) {
+      return;
+    }
+
+    if (!result.hasCoordinates) {
+      setState(() {
+        _isLocating = false;
+        _userPosition = null;
+        _locationMessage = _locationStatusMessage(result);
+      });
+      return;
+    }
+
+    setState(() {
+      _isLocating = false;
+      _userPosition = result.position;
+      _locationMessage = null;
+    });
+
+    await _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(
+            result.position!.latitude,
+            result.position!.longitude,
+          ),
+          zoom: 13.5,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _fitMapToVisibleEvents() async {
+    final GoogleMapController? controller = _mapController;
+    if (controller == null) {
+      return;
+    }
+
+    final List<MapEventLocation> events = _visibleEventLocations();
+    if (events.isEmpty) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(_defaultCamera),
+      );
+      return;
+    }
+
+    if (events.length == 1) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: events.first.position, zoom: 13.2),
+        ),
+      );
+      return;
+    }
+
+    double minLat = events.first.position.latitude;
+    double maxLat = events.first.position.latitude;
+    double minLng = events.first.position.longitude;
+    double maxLng = events.first.position.longitude;
+
+    for (final MapEventLocation event in events) {
+      minLat = math.min(minLat, event.position.latitude);
+      maxLat = math.max(maxLat, event.position.latitude);
+      minLng = math.min(minLng, event.position.longitude);
+      maxLng = math.max(maxLng, event.position.longitude);
+    }
+
+    await controller.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        70.w,
+      ),
+    );
+  }
+
+  String _markerIdFor(EventModel event) {
+    final String id = (event.eventID ?? '').trim();
+    if (id.isNotEmpty) {
+      return id;
+    }
+    return '${event.title ?? 'event'}-${event.startDate ?? ''}-${event.zipCode ?? ''}';
+  }
+
+  String _locationStatusMessage(AppLocationLookupResult result) {
+    switch (result.status) {
+      case 'service_disabled':
+        return 'Location services are disabled. Turn them on to recenter the map.';
+      case 'denied':
+        return 'Location permission was denied. Enable it to show your position.';
+      case 'deniedForever':
+        return 'Location permission is permanently denied. Update it in system settings.';
+      default:
+        return result.message ?? 'Current location is unavailable.';
+    }
   }
 
   void _openEvent(EventModel event) {
@@ -229,21 +530,31 @@ class _MapHeader extends StatelessWidget {
   const _MapHeader({
     required this.isNight,
     required this.zipController,
+    required this.zipFocusNode,
+    required this.isZipLoading,
     required this.onModeChanged,
     required this.onZipChanged,
+    required this.onZipSubmitted,
+    required this.onSearchTap,
+    required this.onFilterTap,
     required this.onClearZip,
   });
 
   final bool isNight;
   final TextEditingController zipController;
+  final FocusNode zipFocusNode;
+  final bool isZipLoading;
   final ValueChanged<bool> onModeChanged;
   final ValueChanged<String> onZipChanged;
+  final ValueChanged<String> onZipSubmitted;
+  final VoidCallback onSearchTap;
+  final VoidCallback onFilterTap;
   final VoidCallback? onClearZip;
 
   @override
   Widget build(BuildContext context) {
     final Color surface =
-        isNight ? const Color(0xD90B0F18) : Colors.white.withOpacity(0.92);
+        isNight ? const Color(0xE80B0F18) : Colors.white.withOpacity(0.95);
     final Color textColor = isNight ? AppColors.textColor : const Color(0xFF172033);
     final Color muted =
         isNight ? AppColors.textLightColor : const Color(0xFF637083);
@@ -255,6 +566,7 @@ class _MapHeader extends StatelessWidget {
             _RoundIconButton(
               icon: Icons.search_rounded,
               isNight: isNight,
+              onTap: onSearchTap,
             ),
             const Spacer(),
             CommonText(
@@ -267,6 +579,7 @@ class _MapHeader extends StatelessWidget {
             _RoundIconButton(
               icon: Icons.tune_rounded,
               isNight: isNight,
+              onTap: onFilterTap,
             ),
           ],
         ),
@@ -278,12 +591,12 @@ class _MapHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(16.r),
             border: Border.all(
               color: isNight
-                  ? Colors.white.withOpacity(0.10)
+                  ? Colors.white.withOpacity(0.12)
                   : const Color(0xFFE1E6EF),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isNight ? 0.24 : 0.08),
+                color: Colors.black.withOpacity(isNight ? 0.28 : 0.10),
                 blurRadius: 18.r,
                 offset: Offset(0, 8.h),
               ),
@@ -309,9 +622,14 @@ class _MapHeader extends StatelessWidget {
                   height: 38.h,
                   child: TextField(
                     controller: zipController,
+                    focusNode: zipFocusNode,
                     keyboardType: TextInputType.number,
                     maxLength: 5,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
                     onChanged: onZipChanged,
+                    onSubmitted: onZipSubmitted,
                     style: TextStyle(
                       color: textColor,
                       fontSize: 13.sp,
@@ -319,7 +637,7 @@ class _MapHeader extends StatelessWidget {
                     ),
                     decoration: InputDecoration(
                       counterText: '',
-                      hintText: 'ZIP',
+                      hintText: 'US ZIP',
                       hintStyle: TextStyle(
                         color: muted,
                         fontSize: 12.sp,
@@ -330,19 +648,27 @@ class _MapHeader extends StatelessWidget {
                         color: muted,
                         size: 17.sp,
                       ),
-                      suffixIcon: onClearZip == null
-                          ? null
-                          : GestureDetector(
-                              onTap: onClearZip,
-                              child: Icon(
-                                Icons.close_rounded,
-                                color: muted,
-                                size: 17.sp,
+                      suffixIcon: isZipLoading
+                          ? Padding(
+                              padding: EdgeInsets.all(11.w),
+                              child: CircularProgressIndicator(
+                                color: const Color(0xFFFF58F3),
+                                strokeWidth: 2,
                               ),
-                            ),
+                            )
+                          : onClearZip == null
+                              ? null
+                              : GestureDetector(
+                                  onTap: onClearZip,
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    color: muted,
+                                    size: 17.sp,
+                                  ),
+                                ),
                       filled: true,
                       fillColor: isNight
-                          ? Colors.black.withOpacity(0.22)
+                          ? Colors.black.withOpacity(0.30)
                           : const Color(0xFFF3F6FA),
                       contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
@@ -388,7 +714,7 @@ class _ModePill extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF733CFF).withOpacity(0.30),
+                    color: const Color(0xFFFF58F3).withOpacity(0.28),
                     blurRadius: 14.r,
                   ),
                 ]
@@ -417,171 +743,138 @@ class _ModePill extends StatelessWidget {
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.isNight});
+  const _RoundIconButton({
+    required this.icon,
+    required this.isNight,
+    this.onTap,
+  });
 
   final IconData icon;
   final bool isNight;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40.w,
+        width: 40.w,
+        decoration: BoxDecoration(
+          color: isNight ? Colors.black.withOpacity(0.42) : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isNight ? Colors.white.withOpacity(0.10) : const Color(0xFFE1E6EF),
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: isNight ? AppColors.textColor : const Color(0xFF172033),
+          size: 23.sp,
+        ),
+      ),
+    );
+  }
+}
+
+class _MapFloatingButton extends StatelessWidget {
+  const _MapFloatingButton({
+    required this.icon,
+    required this.tooltip,
+    required this.isNight,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool isNight;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: isLoading ? null : onTap,
+        child: Container(
+          height: 44.w,
+          width: 44.w,
+          decoration: BoxDecoration(
+            color: isNight ? const Color(0xE80B0F18) : Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isNight
+                  ? Colors.white.withOpacity(0.14)
+                  : const Color(0xFFE1E6EF),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isNight ? 0.36 : 0.12),
+                blurRadius: 18.r,
+                offset: Offset(0, 8.h),
+              ),
+            ],
+          ),
+          child: isLoading
+              ? Padding(
+                  padding: EdgeInsets.all(12.w),
+                  child: CircularProgressIndicator(
+                    color: const Color(0xFF2D9BFF),
+                    strokeWidth: 2,
+                  ),
+                )
+              : Icon(
+                  icon,
+                  color: isNight ? AppColors.textColor : const Color(0xFF172033),
+                  size: 22.sp,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapStatusPill extends StatelessWidget {
+  const _MapStatusPill({
+    required this.text,
+    required this.isNight,
+    this.showSpinner = false,
+  });
+
+  final String text;
+  final bool isNight;
+  final bool showSpinner;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40.w,
-      width: 40.w,
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
       decoration: BoxDecoration(
-        color: isNight ? Colors.black.withOpacity(0.34) : Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isNight ? Colors.white.withOpacity(0.08) : const Color(0xFFE1E6EF),
-        ),
+        color: isNight ? const Color(0xE80B0F18) : Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: Colors.white.withOpacity(isNight ? 0.12 : 0)),
       ),
-      child: Icon(
-        icon,
-        color: isNight ? AppColors.textColor : const Color(0xFF172033),
-        size: 23.sp,
-      ),
-    );
-  }
-}
-
-class _FeaturedEventCallout extends StatelessWidget {
-  const _FeaturedEventCallout({
-    required this.event,
-    required this.color,
-    required this.isNight,
-    required this.onTap,
-  });
-
-  final EventModel event;
-  final Color color;
-  final bool isNight;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 136.w,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: EdgeInsets.all(8.w),
-              decoration: BoxDecoration(
-                color: isNight
-                    ? const Color(0xE80A0D14)
-                    : Colors.white.withOpacity(0.95),
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: color.withOpacity(0.88), width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withOpacity(isNight ? 0.34 : 0.18),
-                    blurRadius: 18.r,
-                    spreadRadius: 0.5.r,
-                  ),
-                ],
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  EventImage(
-                    imageUrl: event.image,
-                    height: 34.w,
-                    width: 34.w,
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                  7.w.horizontalSpace,
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CommonText(
-                          text: _eventTitle(event),
-                          color: isNight
-                              ? AppColors.textColor
-                              : const Color(0xFF172033),
-                          fontSize: 10.5.sp,
-                          fontWeight: FontWeight.w800,
-                          maxLine: 2,
-                          softWrap: true,
-                        ),
-                        4.h.verticalSpace,
-                        CommonText(
-                          text: _eventTime(event),
-                          color: isNight
-                              ? AppColors.textLightColor
-                              : const Color(0xFF637083),
-                          fontSize: 9.sp,
-                          fontWeight: FontWeight.w700,
-                          maxLine: 1,
-                          softWrap: false,
-                        ),
-                        if ((event.zipCode ?? '').trim().isNotEmpty) ...[
-                          3.h.verticalSpace,
-                          CommonText(
-                            text: event.zipCode!.trim(),
-                            color: color,
-                            fontSize: 9.sp,
-                            fontWeight: FontWeight.w800,
-                            maxLine: 1,
-                            softWrap: false,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _GlowStem(color: color),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SmallEventPin extends StatelessWidget {
-  const _SmallEventPin({
-    required this.color,
-    required this.onTap,
-  });
-
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            height: 30.w,
-            width: 30.w,
-            decoration: BoxDecoration(
-              color: const Color(0xE80A0D14),
-              shape: BoxShape.circle,
-              border: Border.all(color: color, width: 1.4),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.42),
-                  blurRadius: 14.r,
-                ),
-              ],
+          if (showSpinner) ...[
+            SizedBox(
+              height: 14.w,
+              width: 14.w,
+              child: CircularProgressIndicator(
+                color: const Color(0xFFFF58F3),
+                strokeWidth: 2,
+              ),
             ),
-            child: Icon(
-              Icons.place_rounded,
-              color: color,
-              size: 17.sp,
-            ),
-          ),
-          Container(
-            height: 18.h,
-            width: 2.w,
-            color: color.withOpacity(0.72),
+            8.w.horizontalSpace,
+          ],
+          CommonText(
+            text: text,
+            color: isNight ? AppColors.textColor : const Color(0xFF172033),
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w800,
           ),
         ],
       ),
@@ -589,73 +882,147 @@ class _SmallEventPin extends StatelessWidget {
   }
 }
 
-class _YouAreHerePin extends StatelessWidget {
-  const _YouAreHerePin();
+class _MapMessageCard extends StatelessWidget {
+  const _MapMessageCard({
+    required this.message,
+    required this.isNight,
+    required this.onClose,
+  });
+
+  final String message;
+  final bool isNight;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    const Color color = Color(0xFF1587FF);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(18.r),
-            border: Border.all(color: Colors.white.withOpacity(0.50)),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.50),
-                blurRadius: 16.r,
-              ),
-            ],
-          ),
-          child: CommonText(
-            text: 'You are here',
-            color: AppColors.textColor,
-            fontSize: 11.sp,
-            fontWeight: FontWeight.w800,
-          ),
+    return Container(
+      padding: EdgeInsets.fromLTRB(12.w, 10.h, 8.w, 10.h),
+      decoration: BoxDecoration(
+        color: isNight ? const Color(0xF20B0F18) : Colors.white,
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(
+          color: isNight ? Colors.white.withOpacity(0.14) : const Color(0xFFE1E6EF),
         ),
-        _GlowStem(color: color),
-      ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: CommonText(
+              text: message,
+              color: isNight ? AppColors.textColor : const Color(0xFF172033),
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w700,
+              maxLine: 3,
+              softWrap: true,
+            ),
+          ),
+          GestureDetector(
+            onTap: onClose,
+            child: Icon(
+              Icons.close_rounded,
+              color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
+              size: 20.sp,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _GlowStem extends StatelessWidget {
-  const _GlowStem({required this.color});
+class _SelectedEventCard extends StatelessWidget {
+  const _SelectedEventCard({
+    required this.event,
+    required this.isNight,
+    required this.onTap,
+    required this.onClose,
+  });
 
-  final Color color;
+  final EventModel event;
+  final bool isNight;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          height: 22.h,
-          width: 2.w,
-          decoration: BoxDecoration(
-            color: color,
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.55),
-                blurRadius: 10.r,
+    final String location = _eventLocation(event);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.all(10.w),
+        decoration: BoxDecoration(
+          color: isNight ? const Color(0xF20B0F18) : Colors.white,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(
+            color: const Color(0xFFFF58F3).withOpacity(isNight ? 0.72 : 0.34),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF58F3).withOpacity(isNight ? 0.26 : 0.12),
+              blurRadius: 22.r,
+              offset: Offset(0, 10.h),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            EventImage(
+              imageUrl: event.image,
+              height: 72.w,
+              width: 72.w,
+              borderRadius: BorderRadius.circular(12.r),
+            ),
+            11.w.horizontalSpace,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CommonText(
+                    text: _eventTitle(event),
+                    color: isNight ? AppColors.textColor : const Color(0xFF172033),
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w800,
+                    maxLine: 2,
+                    softWrap: true,
+                  ),
+                  6.h.verticalSpace,
+                  CommonText(
+                    text: _eventTime(event),
+                    color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w700,
+                    maxLine: 1,
+                    softWrap: false,
+                  ),
+                  if (location.isNotEmpty) ...[
+                    5.h.verticalSpace,
+                    CommonText(
+                      text: location,
+                      color: const Color(0xFF2D9BFF),
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w800,
+                      maxLine: 1,
+                      softWrap: false,
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+            8.w.horizontalSpace,
+            GestureDetector(
+              onTap: onClose,
+              child: Icon(
+                Icons.close_rounded,
+                color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
+                size: 22.sp,
+              ),
+            ),
+          ],
         ),
-        Container(
-          height: 8.w,
-          width: 18.w,
-          decoration: BoxDecoration(
-            border: Border.all(color: color.withOpacity(0.90), width: 1.5),
-            borderRadius: BorderRadius.circular(50.r),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -664,18 +1031,26 @@ class _EventTray extends StatelessWidget {
   const _EventTray({
     required this.events,
     required this.zipFilter,
-    required this.onClose,
+    required this.isExpanded,
+    required this.onToggleExpanded,
     required this.onTapEvent,
   });
 
   final List<EventModel> events;
   final String zipFilter;
-  final VoidCallback onClose;
+  final bool isExpanded;
+  final VoidCallback onToggleExpanded;
   final ValueChanged<EventModel> onTapEvent;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final double height = isExpanded ? 324.h : 84.h;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      height: height,
+      margin: EdgeInsets.symmetric(horizontal: 14.w),
       padding: EdgeInsets.fromLTRB(13.w, 10.h, 13.w, 13.h),
       decoration: BoxDecoration(
         color: const Color(0xF20C0D13),
@@ -691,167 +1066,175 @@ class _EventTray extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Center(
-            child: Container(
-              height: 4.h,
-              width: 42.w,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(99.r),
-              ),
-            ),
-          ),
-          8.h.verticalSpace,
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CommonText(
-                      text: zipFilter.isEmpty
-                          ? 'Events around Chicago'
-                          : 'Events near $zipFilter',
-                      color: AppColors.textColor,
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w800,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggleExpanded,
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    height: 4.h,
+                    width: 42.w,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.20),
+                      borderRadius: BorderRadius.circular(99.r),
                     ),
-                    2.h.verticalSpace,
-                    CommonText(
-                      text: events.isEmpty
-                          ? 'No events to show yet'
-                          : '${events.length} real event${events.length == 1 ? '' : 's'} available',
-                      color: AppColors.textLightColor,
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
+                  ),
+                ),
+                8.h.verticalSpace,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CommonText(
+                            text: zipFilter.isEmpty
+                                ? 'Map events'
+                                : 'Events near $zipFilter',
+                            color: AppColors.textColor,
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w800,
+                            maxLine: 1,
+                            softWrap: false,
+                          ),
+                          2.h.verticalSpace,
+                          CommonText(
+                            text:
+                                '${events.length} event${events.length == 1 ? '' : 's'} represented',
+                            color: AppColors.textLightColor,
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w600,
+                            maxLine: 1,
+                            softWrap: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      height: 32.w,
+                      width: 32.w,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.07),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_down_rounded
+                            : Icons.keyboard_arrow_up_rounded,
+                        color: AppColors.textLightColor,
+                        size: 24.sp,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              GestureDetector(
-                onTap: onClose,
-                child: Container(
-                  height: 32.w,
-                  width: 32.w,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.07),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textLightColor,
-                    size: 20.sp,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          11.h.verticalSpace,
-          SizedBox(
-            height: 78.h,
-            child: events.isEmpty
-                ? Center(
-                    child: CommonText(
-                      text: 'Try another ZIP code.',
-                      color: AppColors.textLightColor,
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w700,
+          if (isExpanded) ...[
+            12.h.verticalSpace,
+            Expanded(
+              child: events.isEmpty
+                  ? Center(
+                      child: CommonText(
+                        text: 'Try another ZIP code or clear the search.',
+                        color: AppColors.textLightColor,
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w700,
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: events.length,
+                      separatorBuilder: (_, __) => 10.h.verticalSpace,
+                      itemBuilder: (context, index) {
+                        final EventModel event = events[index];
+                        return _TrayEventCard(
+                          event: event,
+                          onTap: () => onTapEvent(event),
+                        );
+                      },
                     ),
-                  )
-                : ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: math.min(events.length, 12),
-                    separatorBuilder: (_, __) => 10.w.horizontalSpace,
-                    itemBuilder: (context, index) {
-                      final EventModel event = events[index];
-                      return GestureDetector(
-                        onTap: () => onTapEvent(event),
-                        child: SizedBox(
-                          width: 118.w,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: EventImage(
-                                  imageUrl: event.image,
-                                  height: 78.h,
-                                  width: 118.w,
-                                  borderRadius: BorderRadius.circular(10.r),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(10.r),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black.withOpacity(0.74),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                left: 8.w,
-                                right: 8.w,
-                                bottom: 7.h,
-                                child: CommonText(
-                                  text: _eventTitle(event),
-                                  color: AppColors.textColor,
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w800,
-                                  maxLine: 2,
-                                  softWrap: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _ShowTrayButton extends StatelessWidget {
-  const _ShowTrayButton({required this.count, required this.onTap});
+class _TrayEventCard extends StatelessWidget {
+  const _TrayEventCard({
+    required this.event,
+    required this.onTap,
+  });
 
-  final int count;
+  final EventModel event;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final String location = _eventLocation(event);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+        padding: EdgeInsets.all(8.w),
         decoration: BoxDecoration(
-          color: const Color(0xF20C0D13),
-          borderRadius: BorderRadius.circular(24.r),
-          border: Border.all(color: Colors.white.withOpacity(0.14)),
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12.r),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.keyboard_arrow_up_rounded,
-              color: AppColors.textColor,
-              size: 20.sp,
+            EventImage(
+              imageUrl: event.image,
+              height: 52.w,
+              width: 52.w,
+              borderRadius: BorderRadius.circular(9.r),
             ),
-            5.w.horizontalSpace,
-            CommonText(
-              text: '$count event${count == 1 ? '' : 's'}',
-              color: AppColors.textColor,
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w800,
+            10.w.horizontalSpace,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CommonText(
+                    text: _eventTitle(event),
+                    color: AppColors.textColor,
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w800,
+                    maxLine: 2,
+                    softWrap: true,
+                  ),
+                  5.h.verticalSpace,
+                  CommonText(
+                    text: _eventTime(event),
+                    color: AppColors.textLightColor,
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w700,
+                    maxLine: 1,
+                    softWrap: false,
+                  ),
+                  if (location.isNotEmpty) ...[
+                    4.h.verticalSpace,
+                    CommonText(
+                      text: location,
+                      color: const Color(0xFF2D9BFF),
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w800,
+                      maxLine: 1,
+                      softWrap: false,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textLightColor,
+              size: 22.sp,
             ),
           ],
         ),
@@ -868,281 +1251,26 @@ class _EmptyMapState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 230.w,
-        padding: EdgeInsets.all(16.w),
-        decoration: BoxDecoration(
-          color: isNight ? const Color(0xE80A0D14) : Colors.white.withOpacity(0.94),
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(
-            color: isNight ? Colors.white.withOpacity(0.12) : const Color(0xFFE1E6EF),
-          ),
-        ),
-        child: CommonText(
-          text: zipFilter.isEmpty
-              ? 'No events are available on the map yet.'
-              : 'No events matched that ZIP code yet.',
-          color: isNight ? AppColors.textColor : const Color(0xFF172033),
-          fontSize: 13.sp,
-          fontWeight: FontWeight.w700,
-          textAlign: TextAlign.center,
+    return Container(
+      width: 250.w,
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: isNight ? const Color(0xE80A0D14) : Colors.white.withOpacity(0.96),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: isNight ? Colors.white.withOpacity(0.12) : const Color(0xFFE1E6EF),
         ),
       ),
-    );
-  }
-}
-
-class _ChicagoMapPainter extends CustomPainter {
-  const _ChicagoMapPainter({required this.isNight});
-
-  final bool isNight;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Rect rect = Offset.zero & size;
-    final Paint background = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: isNight
-            ? const [
-                Color(0xFF050712),
-                Color(0xFF0A101A),
-                Color(0xFF06080D),
-              ]
-            : const [
-                Color(0xFFF5F8FC),
-                Color(0xFFEAF0F7),
-                Color(0xFFF9FBFE),
-              ],
-      ).createShader(rect);
-    canvas.drawRect(rect, background);
-
-    _drawLake(canvas, size);
-    _drawChicagoGrid(canvas, size);
-    _drawMainRoutes(canvas, size);
-    _drawLabels(canvas, size);
-  }
-
-  void _drawLake(Canvas canvas, Size size) {
-    final Path lake = Path()
-      ..moveTo(size.width * 0.73, 0)
-      ..cubicTo(
-        size.width * 0.65,
-        size.height * 0.22,
-        size.width * 0.78,
-        size.height * 0.42,
-        size.width * 0.70,
-        size.height * 0.63,
-      )
-      ..cubicTo(
-        size.width * 0.64,
-        size.height * 0.78,
-        size.width * 0.78,
-        size.height * 0.92,
-        size.width * 0.74,
-        size.height,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width, 0)
-      ..close();
-
-    canvas.drawPath(
-      lake,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: isNight
-              ? const [
-                  Color(0x00136887),
-                  Color(0xAA08385B),
-                  Color(0xFF061A31),
-                ]
-              : const [
-                  Color(0x332E9BEF),
-                  Color(0xFFBFE3FF),
-                  Color(0xFFE6F5FF),
-                ],
-        ).createShader(Offset.zero & size),
-    );
-
-    _drawText(
-      canvas,
-      'Lake\nMichigan',
-      Offset(size.width * 0.80, size.height * 0.32),
-      color: isNight ? const Color(0xFF47AFFF) : const Color(0xFF2E75B8),
-      fontSize: 14,
-      weight: FontWeight.w800,
-      align: TextAlign.center,
-    );
-  }
-
-  void _drawChicagoGrid(Canvas canvas, Size size) {
-    final Paint minor = Paint()
-      ..color = (isNight ? const Color(0xFF8795A8) : const Color(0xFF9EACBA))
-          .withOpacity(isNight ? 0.15 : 0.34)
-      ..strokeWidth = 0.75;
-    final Paint major = Paint()
-      ..color = (isNight ? const Color(0xFFFF58F3) : const Color(0xFF59718C))
-          .withOpacity(isNight ? 0.25 : 0.42)
-      ..strokeWidth = 1.0;
-
-    final double left = size.width * 0.03;
-    final double right = size.width * 0.72;
-    final double top = size.height * 0.13;
-    final double bottom = size.height * 0.95;
-
-    for (int i = 0; i < 15; i++) {
-      final double x = left + (right - left) * i / 14;
-      canvas.drawLine(
-        Offset(x, top),
-        Offset(x + size.width * 0.08, bottom),
-        i % 4 == 0 ? major : minor,
-      );
-    }
-
-    for (int i = 0; i < 22; i++) {
-      final double y = top + (bottom - top) * i / 21;
-      canvas.drawLine(
-        Offset(left, y),
-        Offset(right, y - size.height * 0.035),
-        i % 5 == 0 ? major : minor,
-      );
-    }
-  }
-
-  void _drawMainRoutes(Canvas canvas, Size size) {
-    final Paint routeBlue = Paint()
-      ..color = (isNight ? const Color(0xFF2D9BFF) : const Color(0xFF387DBF))
-          .withOpacity(isNight ? 0.72 : 0.58)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.1
-      ..strokeCap = StrokeCap.round;
-    final Paint routeMagenta = Paint()
-      ..color = (isNight ? const Color(0xFFFF58F3) : const Color(0xFF8B6EA8))
-          .withOpacity(isNight ? 0.55 : 0.44)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
-      ..strokeCap = StrokeCap.round;
-
-    final Path lakeShore = Path()
-      ..moveTo(size.width * 0.72, size.height * 0.08)
-      ..cubicTo(
-        size.width * 0.64,
-        size.height * 0.30,
-        size.width * 0.75,
-        size.height * 0.52,
-        size.width * 0.68,
-        size.height * 0.92,
-      );
-    canvas.drawPath(lakeShore, routeBlue);
-
-    final Path westRoute = Path()
-      ..moveTo(size.width * 0.12, size.height * 0.18)
-      ..cubicTo(
-        size.width * 0.23,
-        size.height * 0.36,
-        size.width * 0.22,
-        size.height * 0.58,
-        size.width * 0.35,
-        size.height * 0.84,
-      );
-    canvas.drawPath(westRoute, routeMagenta);
-
-    final Path centerRoute = Path()
-      ..moveTo(size.width * 0.45, size.height * 0.12)
-      ..cubicTo(
-        size.width * 0.50,
-        size.height * 0.36,
-        size.width * 0.45,
-        size.height * 0.60,
-        size.width * 0.57,
-        size.height * 0.90,
-      );
-    canvas.drawPath(centerRoute, routeMagenta);
-  }
-
-  void _drawLabels(Canvas canvas, Size size) {
-    final Color neighborhood =
-        isNight ? const Color(0xFFFF8DF7) : const Color(0xFF445466);
-    _drawText(
-      canvas,
-      'CHICAGO',
-      Offset(size.width * 0.34, size.height * 0.46),
-      color: neighborhood.withOpacity(isNight ? 0.42 : 0.38),
-      fontSize: 30,
-      weight: FontWeight.w900,
-    );
-    _drawText(
-      canvas,
-      'Lincoln Park',
-      Offset(size.width * 0.42, size.height * 0.20),
-      color: neighborhood,
-    );
-    _drawText(
-      canvas,
-      'Wicker Park',
-      Offset(size.width * 0.31, size.height * 0.34),
-      color: neighborhood,
-    );
-    _drawText(
-      canvas,
-      'West Loop',
-      Offset(size.width * 0.34, size.height * 0.61),
-      color: neighborhood,
-    );
-    _drawText(
-      canvas,
-      'South Loop',
-      Offset(size.width * 0.54, size.height * 0.68),
-      color: neighborhood,
-    );
-    _drawText(
-      canvas,
-      'Hyde Park',
-      Offset(size.width * 0.50, size.height * 0.84),
-      color: neighborhood,
-    );
-  }
-
-  void _drawText(
-    Canvas canvas,
-    String text,
-    Offset offset, {
-    required Color color,
-    double fontSize = 10,
-    FontWeight weight = FontWeight.w800,
-    TextAlign align = TextAlign.left,
-  }) {
-    final TextPainter painter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textAlign: align,
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color.withOpacity(isNight ? 0.76 : 0.88),
-          fontSize: fontSize,
-          fontWeight: weight,
-          letterSpacing: 0,
-          shadows: isNight
-              ? [
-                  Shadow(
-                    color: color.withOpacity(0.36),
-                    blurRadius: 8,
-                  ),
-                ]
-              : null,
-        ),
+      child: CommonText(
+        text: zipFilter.isEmpty
+            ? 'No mapped events are available yet.'
+            : 'No mapped events matched that ZIP code.',
+        color: isNight ? AppColors.textColor : const Color(0xFF172033),
+        fontSize: 13.sp,
+        fontWeight: FontWeight.w700,
+        textAlign: TextAlign.center,
       ),
-    )..layout(maxWidth: 140);
-    painter.paint(canvas, offset);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ChicagoMapPainter oldDelegate) {
-    return oldDelegate.isNight != isNight;
+    );
   }
 }
 
@@ -1158,3 +1286,127 @@ String _eventTime(EventModel event) {
   }
   return DateFormat('EEE, MMM d - h:mm a').format(parsed);
 }
+
+String _eventLocation(EventModel event) {
+  final List<String> parts = <String>[
+    event.address,
+    event.city,
+    event.state,
+    event.zipCode,
+  ]
+      .whereType<String>()
+      .map((String value) => value.trim())
+      .where((String value) => value.isNotEmpty)
+      .toList();
+  return parts.join(', ');
+}
+
+const String _dayMapStyle = '''
+[
+  {
+    "featureType": "poi.business",
+    "stylers": [{ "visibility": "off" }]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.icon",
+    "stylers": [{ "visibility": "off" }]
+  },
+  {
+    "featureType": "water",
+    "stylers": [{ "color": "#bfe7ff" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#ffffff" }]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#e7edf5" }]
+  }
+]
+''';
+
+const String _nightMapStyle = '''
+[
+  {
+    "elementType": "geometry",
+    "stylers": [{ "color": "#070a13" }]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#d8d9ff" }]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [{ "color": "#080914" }]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#ff8df7" }]
+  },
+  {
+    "featureType": "landscape",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#080b15" }]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.icon",
+    "stylers": [{ "visibility": "off" }]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#071a18" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#303342" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.stroke",
+    "stylers": [{ "color": "#141626" }]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#aeb3c7" }]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#4b315e" }]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#5b23e5" }]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [{ "color": "#ff58f3" }]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#1f2540" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [{ "color": "#06345d" }]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [{ "color": "#2d9bff" }]
+  }
+]
+''';
