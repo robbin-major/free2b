@@ -29,6 +29,8 @@ class MapScreen extends StatefulWidget {
 enum _EventTrayState { expanded, collapsed, dismissed }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
+  static const bool _useDefaultMapStyleForDiagnostic = true;
+  static const String _diagnosticLogPrefix = 'Free2BMap';
   static const LatLng _defaultCenter = LatLng(41.8781, -87.6298);
   static const CameraPosition _defaultCamera = CameraPosition(
     target: _defaultCenter,
@@ -53,9 +55,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _isResolvingLocations = false;
   bool _isZipLoading = false;
   bool _isLocating = false;
+  bool _mapCreated = false;
+  bool _mapCameraSettled = false;
   String _zipFilter = '';
   String? _mapMessage;
   String? _locationMessage;
+  String? _mapDiagnosticError;
+  CameraPosition _lastCameraPosition = _defaultCamera;
   Position? _userPosition;
   EventModel? _selectedEvent;
   List<MapEventLocation> _resolvedEvents = <MapEventLocation>[];
@@ -120,6 +126,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 compassEnabled: true,
                 mapToolbarEnabled: false,
                 onMapCreated: _onMapCreated,
+                onCameraMove: _onCameraMove,
+                onCameraIdle: _onCameraIdle,
                 onTap: (_) => _clearSelectedEvent(),
               ),
             ),
@@ -190,6 +198,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   }),
                 ),
               ),
+            if (_mapDiagnosticError != null)
+              Positioned(
+                top: 178.h,
+                left: 14.w,
+                right: 72.w,
+                child: _MapMessageCard(
+                  message: _mapDiagnosticError!,
+                  isNight: _isNight,
+                  onClose: () => setState(() {
+                    _mapDiagnosticError = null;
+                  }),
+                ),
+              ),
             if (_selectedEvent != null)
               Positioned(
                 left: 14.w,
@@ -217,7 +238,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 180),
                   opacity: _trayState == _EventTrayState.expanded ? 1 : 0,
-                  child: Container(color: Colors.black.withOpacity(0.20)),
+                  child: Container(color: Colors.transparent),
                 ),
               ),
             ),
@@ -238,8 +259,35 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _onMapCreated(GoogleMapController controller) async {
     _mapController = controller;
-    await _applyMapStyle();
-    await _fitMapToVisibleEvents();
+    setState(() {
+      _mapCreated = true;
+      _mapDiagnosticError = null;
+    });
+    _logMapDiagnostic(
+      'created defaultStyle=$_useDefaultMapStyleForDiagnostic '
+      'initialTarget=${_formatLatLng(_defaultCamera.target)} '
+      'initialZoom=${_defaultCamera.zoom.toStringAsFixed(1)} '
+      'markers=${_markers.length}',
+    );
+
+    try {
+      await _applyMapStyle();
+      await _fitMapToVisibleEvents();
+    } catch (error, stackTrace) {
+      _logMapDiagnostic('initialization failed: $error');
+      debugPrintStack(
+        label: '$_diagnosticLogPrefix initialization stack',
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mapDiagnosticError =
+            'Internal map diagnostic: map initialization failed. '
+            'See device logs for $_diagnosticLogPrefix.';
+      });
+    }
   }
 
   Future<void> _changeMapMode(bool isNight) async {
@@ -378,9 +426,65 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _applyMapStyle() async {
     final GoogleMapController? controller = _mapController;
     if (controller == null) {
+      _logMapDiagnostic('style skipped: controller not ready');
       return;
     }
-    await controller.setMapStyle(_isNight ? _nightMapStyle : _dayMapStyle);
+    if (_useDefaultMapStyleForDiagnostic) {
+      _logMapDiagnostic('style skipped: diagnostic default normal map active');
+      return;
+    }
+
+    try {
+      await controller.setMapStyle(_isNight ? _nightMapStyle : _dayMapStyle);
+      _logMapDiagnostic('style applied: ${_isNight ? 'night' : 'day'}');
+      if (mounted) {
+        setState(() => _mapDiagnosticError = null);
+      }
+    } catch (error, stackTrace) {
+      _logMapDiagnostic('style failed: $error');
+      debugPrintStack(
+        label: '$_diagnosticLogPrefix style stack',
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mapDiagnosticError =
+            'Internal map diagnostic: map styling failed. '
+            'Using default Google map.';
+      });
+    }
+  }
+
+  void _onCameraMove(CameraPosition position) {
+    _lastCameraPosition = position;
+    if (!_mapCameraSettled) {
+      _logMapDiagnostic(
+        'camera moving target=${_formatLatLng(position.target)} '
+        'zoom=${position.zoom.toStringAsFixed(2)}',
+      );
+    }
+  }
+
+  void _onCameraIdle() {
+    if (!_mapCameraSettled) {
+      setState(() => _mapCameraSettled = true);
+    }
+    _logMapDiagnostic(
+      'camera idle target=${_formatLatLng(_lastCameraPosition.target)} '
+      'zoom=${_lastCameraPosition.zoom.toStringAsFixed(2)} '
+      'mapCreated=$_mapCreated markers=${_markers.length}',
+    );
+  }
+
+  void _logMapDiagnostic(String message) {
+    debugPrint('$_diagnosticLogPrefix: $message');
+  }
+
+  String _formatLatLng(LatLng position) {
+    return '${position.latitude.toStringAsFixed(5)},'
+        '${position.longitude.toStringAsFixed(5)}';
   }
 
   Future<void> _resolveVisibleEventLocations() async {
