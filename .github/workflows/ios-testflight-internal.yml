@@ -83,20 +83,67 @@ jobs:
         run: |
           CERTIFICATE_PATH="$RUNNER_TEMP/ios_distribution.p12"
           PROFILE_PATH="$RUNNER_TEMP/free2b_appstore.mobileprovision"
+          PROFILE_PLIST_PATH="$RUNNER_TEMP/free2b_appstore.plist"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          export CERTIFICATE_PATH PROFILE_PATH
 
-          printf '%s' "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
-          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          python3 - <<'PY'
+          import base64
+          import os
+          import pathlib
+          import sys
+
+          outputs = {
+              "IOS_CERTIFICATE_BASE64": pathlib.Path(os.environ["CERTIFICATE_PATH"]),
+              "IOS_PROVISIONING_PROFILE_BASE64": pathlib.Path(os.environ["PROFILE_PATH"]),
+          }
+
+          for env_name, output_path in outputs.items():
+              encoded = os.environ.get(env_name, "")
+              compact = "".join(encoded.split())
+              if not compact:
+                  print(f"{env_name} is configured but empty after whitespace normalization.")
+                  sys.exit(1)
+              try:
+                  decoded = base64.b64decode(compact, validate=True)
+              except Exception as error:
+                  print(f"{env_name} is not valid Base64: {error}")
+                  sys.exit(1)
+              if not decoded:
+                  print(f"{env_name} decoded to an empty file.")
+                  sys.exit(1)
+              output_path.write_bytes(decoded)
+              print(f"Decoded {env_name} to {output_path.name} ({len(decoded)} bytes).")
+          PY
+
+          if ! security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST_PATH"; then
+            echo "Provisioning profile could not be decoded as a signed mobileprovision file."
+            exit 1
+          fi
+
+          PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$PROFILE_PLIST_PATH")"
+          PROFILE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST_PATH" | sed "s/^${PROFILE_TEAM_ID}\.//")"
+          if [ "$PROFILE_TEAM_ID" != "$APPLE_TEAM_ID" ]; then
+            echo "Provisioning profile team ID does not match APPLE_TEAM_ID."
+            exit 1
+          fi
+          if [ "$PROFILE_BUNDLE_ID" != "$BUNDLE_ID" ]; then
+            echo "Provisioning profile bundle identifier does not match BUNDLE_ID."
+            exit 1
+          fi
 
           security create-keychain -p "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security import "$CERTIFICATE_PATH" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_UUID="$(security cms -D -i "$PROFILE_PATH" | /usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin)"
-          PROFILE_NAME="$(security cms -D -i "$PROFILE_PATH" | /usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin)"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$PROFILE_PLIST_PATH")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print Name' "$PROFILE_PLIST_PATH")"
+          echo "Installed provisioning profile '$PROFILE_NAME' for $PROFILE_BUNDLE_ID."
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
           {
