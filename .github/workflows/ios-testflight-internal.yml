@@ -122,14 +122,18 @@ jobs:
           fi
 
           PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$PROFILE_PLIST_PATH")"
-          PROFILE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST_PATH" | sed "s/^${PROFILE_TEAM_ID}\.//")"
+          PROFILE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST_PATH" 2>/dev/null | sed "s/^${PROFILE_TEAM_ID}\.//" || true)"
           if [ "$PROFILE_TEAM_ID" != "$APPLE_TEAM_ID" ]; then
             echo "Provisioning profile team ID does not match APPLE_TEAM_ID."
             exit 1
           fi
-          if [ "$PROFILE_BUNDLE_ID" != "$BUNDLE_ID" ]; then
+          if [ -n "$PROFILE_BUNDLE_ID" ] && [ "$PROFILE_BUNDLE_ID" != "$BUNDLE_ID" ]; then
             echo "Provisioning profile bundle identifier does not match BUNDLE_ID."
             exit 1
+          fi
+          if [ -z "$PROFILE_BUNDLE_ID" ]; then
+            echo "Provisioning profile does not expose an application-identifier entitlement; deferring bundle match validation to Xcode export."
+            PROFILE_BUNDLE_ID="$BUNDLE_ID"
           fi
 
           security create-keychain -p "$IOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
