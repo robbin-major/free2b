@@ -41,6 +41,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "ANDROID_KEYSTORE_BASE64 is not configured."
@@ -58,6 +59,10 @@ jobs:
             echo "ANDROID_KEY_PASSWORD is not configured."
             exit 1
           fi
+          if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+            echo "GOOGLE_MAPS_API_KEY is not configured."
+            exit 1
+          fi
 
       - name: Decode Android keystore
         env:
@@ -72,7 +77,48 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: flutter build appbundle --release --no-shrink
+
+      - name: Verify release Maps manifest metadata
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          manifests = sorted(pathlib.Path("build/app/intermediates").glob("**/AndroidManifest.xml"))
+          candidates = [
+              path for path in manifests
+              if "release" in str(path).lower() and "merged" in str(path).lower()
+          ]
+          manifest_path = candidates[-1] if candidates else None
+          if manifest_path is None:
+              print("No merged release AndroidManifest.xml was found.")
+              sys.exit(1)
+
+          android_ns = "{http://schemas.android.com/apk/res/android}"
+          root = ET.parse(manifest_path).getroot()
+          application = root.find("application")
+          if application is None:
+              print("Merged release manifest has no application element.")
+              sys.exit(1)
+
+          value = None
+          for item in application.findall("meta-data"):
+              if item.get(android_ns + "name") == "com.google.android.geo.API_KEY":
+                  value = item.get(android_ns + "value")
+                  break
+
+          if value is None:
+              print("Merged release manifest is missing com.google.android.geo.API_KEY.")
+              sys.exit(1)
+          if not value.strip() or value == "${googleMapsApiKey}":
+              print("Merged release manifest has an empty or unresolved Google Maps API key.")
+              sys.exit(1)
+
+          print("Merged release manifest contains Google Maps API key metadata.")
+          PY
 
       - name: Upload app bundle artifact
         uses: actions/upload-artifact@v4

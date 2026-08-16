@@ -47,6 +47,9 @@ gradle.taskGraph.whenReady { taskGraph ->
     if (releaseBuildRequested && !hasReleaseSigning) {
         throw new GradleException('Missing Android release signing configuration. Set ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD.')
     }
+    if (releaseBuildRequested && !googleMapsApiKey?.trim()) {
+        throw new GradleException('Missing GOOGLE_MAPS_API_KEY for Android release build.')
+    }
 }
 
 android {

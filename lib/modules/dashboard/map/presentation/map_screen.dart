@@ -26,7 +26,9 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+enum _EventTrayState { expanded, collapsed, dismissed }
+
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   static const LatLng _defaultCenter = LatLng(41.8781, -87.6298);
   static const CameraPosition _defaultCamera = CameraPosition(
     target: _defaultCenter,
@@ -44,8 +46,10 @@ class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   Worker? _eventWorker;
   Timer? _zipDebounce;
-  bool _isNight = true;
-  bool _isTrayExpanded = false;
+  Timer? _daylightTimer;
+  bool _isNight = false;
+  bool _hasManualMapMode = false;
+  _EventTrayState _trayState = _EventTrayState.collapsed;
   bool _isResolvingLocations = false;
   bool _isZipLoading = false;
   bool _isLocating = false;
@@ -60,6 +64,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _homeController = Get.isRegistered<HomeController>()
         ? Get.find<HomeController>()
         : Get.put(HomeController());
@@ -71,16 +76,26 @@ class _MapScreenState extends State<MapScreen> {
     _eventWorker = ever<List<EventModel>>(_homeController.eventData, (_) {
       _resolveVisibleEventLocations();
     });
+    _applyAutomaticMapMode();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _zipDebounce?.cancel();
+    _daylightTimer?.cancel();
     _eventWorker?.dispose();
     _zipController.dispose();
     _zipFocusNode.dispose();
     _mapController?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_hasManualMapMode) {
+      _applyAutomaticMapMode();
+    }
   }
 
   @override
@@ -121,7 +136,9 @@ class _MapScreenState extends State<MapScreen> {
                 onZipChanged: _onZipChanged,
                 onZipSubmitted: _applyZipSearch,
                 onSearchTap: () => _zipFocusNode.requestFocus(),
-                onFilterTap: () => setState(() => _isTrayExpanded = true),
+                onFilterTap: () {
+                  setState(() => _trayState = _EventTrayState.expanded);
+                },
                 onClearZip: _zipFilter.isEmpty && _zipController.text.isEmpty
                     ? null
                     : _clearZipSearch,
@@ -177,7 +194,7 @@ class _MapScreenState extends State<MapScreen> {
               Positioned(
                 left: 14.w,
                 right: 14.w,
-                bottom: _isTrayExpanded ? 248.h : 104.h,
+                bottom: _selectedEventBottomInset(),
                 child: _SelectedEventCard(
                   event: _selectedEvent!,
                   isNight: _isNight,
@@ -196,25 +213,20 @@ class _MapScreenState extends State<MapScreen> {
               ),
             Positioned.fill(
               child: IgnorePointer(
-                ignoring: !_isTrayExpanded,
+                ignoring: _trayState != _EventTrayState.expanded,
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 180),
-                  opacity: _isTrayExpanded ? 1 : 0,
+                  opacity: _trayState == _EventTrayState.expanded ? 1 : 0,
                   child: Container(color: Colors.black.withOpacity(0.20)),
                 ),
               ),
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 8.h,
+            Positioned.fill(
               child: _EventTray(
                 events: visibleEvents.map((item) => item.event).toList(),
                 zipFilter: _zipFilter,
-                isExpanded: _isTrayExpanded,
-                onToggleExpanded: () {
-                  setState(() => _isTrayExpanded = !_isTrayExpanded);
-                },
+                state: _trayState,
+                onStateChanged: (state) => setState(() => _trayState = state),
                 onTapEvent: _openEvent,
               ),
             ),
@@ -231,8 +243,136 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _changeMapMode(bool isNight) async {
-    setState(() => _isNight = isNight);
+    _daylightTimer?.cancel();
+    setState(() {
+      _hasManualMapMode = true;
+      _isNight = isNight;
+    });
     await _applyMapStyle();
+  }
+
+  Future<void> _applyAutomaticMapMode() async {
+    if (_hasManualMapMode) {
+      return;
+    }
+
+    final _DaylightResult daylight = await _resolveCurrentDaylight();
+    if (!mounted || _hasManualMapMode) {
+      return;
+    }
+
+    setState(() => _isNight = !daylight.isDaylight);
+    await _applyMapStyle();
+    _scheduleNextDaylightCheck(daylight.nextBoundary);
+  }
+
+  Future<_DaylightResult> _resolveCurrentDaylight() async {
+    LatLng position = _defaultCenter;
+    try {
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final LocationPermission permission = await Geolocator.checkPermission();
+      if (serviceEnabled &&
+          permission != LocationPermission.denied &&
+          permission != LocationPermission.deniedForever) {
+        final Position? known = await Geolocator.getLastKnownPosition();
+        if (known != null) {
+          position = LatLng(known.latitude, known.longitude);
+        } else {
+          final Position current = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+          ).timeout(const Duration(seconds: 4));
+          position = LatLng(current.latitude, current.longitude);
+        }
+      }
+    } catch (_) {
+      position = _defaultCenter;
+    }
+    return _calculateDaylight(position, DateTime.now());
+  }
+
+  _DaylightResult _calculateDaylight(LatLng position, DateTime now) {
+    final DateTime sunrise = _sunBoundary(position, now, true);
+    final DateTime sunset = _sunBoundary(position, now, false);
+    final bool isDaylight = !now.isBefore(sunrise) && now.isBefore(sunset);
+
+    DateTime nextBoundary;
+    if (now.isBefore(sunrise)) {
+      nextBoundary = sunrise;
+    } else if (now.isBefore(sunset)) {
+      nextBoundary = sunset;
+    } else {
+      nextBoundary = _sunBoundary(
+        position,
+        now.add(const Duration(days: 1)),
+        true,
+      );
+    }
+
+    return _DaylightResult(
+      isDaylight: isDaylight,
+      nextBoundary: nextBoundary,
+    );
+  }
+
+  DateTime _sunBoundary(LatLng position, DateTime date, bool sunrise) {
+    final int dayOfYear =
+        date.difference(DateTime(date.year, 1, 1)).inDays + 1;
+    final double lngHour = position.longitude / 15;
+    final double t = dayOfYear + ((sunrise ? 6 : 18) - lngHour) / 24;
+    final double meanAnomaly = (0.9856 * t) - 3.289;
+    double trueLongitude = meanAnomaly +
+        (1.916 * math.sin(_degreesToRadians(meanAnomaly))) +
+        (0.020 * math.sin(_degreesToRadians(2 * meanAnomaly))) +
+        282.634;
+    trueLongitude = _normalizeDegrees(trueLongitude);
+
+    double rightAscension = _radiansToDegrees(
+      math.atan(0.91764 * math.tan(_degreesToRadians(trueLongitude))),
+    );
+    rightAscension = _normalizeDegrees(rightAscension);
+    final double longitudeQuadrant = (trueLongitude / 90).floor() * 90;
+    final double ascensionQuadrant = (rightAscension / 90).floor() * 90;
+    rightAscension =
+        (rightAscension + longitudeQuadrant - ascensionQuadrant) / 15;
+
+    final double sinDeclination =
+        0.39782 * math.sin(_degreesToRadians(trueLongitude));
+    final double cosDeclination =
+        math.cos(math.asin(sinDeclination));
+    final double cosHourAngle = (math.cos(_degreesToRadians(90.833)) -
+            (sinDeclination * math.sin(_degreesToRadians(position.latitude)))) /
+        (cosDeclination * math.cos(_degreesToRadians(position.latitude)));
+
+    if (cosHourAngle > 1) {
+      return DateTime(date.year, date.month, date.day, 12);
+    }
+    if (cosHourAngle < -1) {
+      return DateTime(date.year, date.month, date.day);
+    }
+
+    final double hourAngle = sunrise
+        ? (360 - _radiansToDegrees(math.acos(cosHourAngle))) / 15
+        : _radiansToDegrees(math.acos(cosHourAngle)) / 15;
+    final double localMeanTime =
+        hourAngle + rightAscension - (0.06571 * t) - 6.622;
+    final double utcHours = _normalizeHours(localMeanTime - lngHour);
+    final double localHours = _normalizeHours(
+      utcHours + date.timeZoneOffset.inMinutes / 60,
+    );
+
+    final int hour = localHours.floor();
+    final int minute = ((localHours - hour) * 60).round();
+    return DateTime(date.year, date.month, date.day, hour, 0)
+        .add(Duration(minutes: minute));
+  }
+
+  void _scheduleNextDaylightCheck(DateTime boundary) {
+    _daylightTimer?.cancel();
+    final Duration delay = boundary.difference(DateTime.now());
+    _daylightTimer = Timer(
+      delay.isNegative ? const Duration(minutes: 15) : delay + const Duration(seconds: 2),
+      _applyAutomaticMapMode,
+    );
   }
 
   Future<void> _applyMapStyle() async {
@@ -521,9 +661,30 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  double _selectedEventBottomInset() {
+    switch (_trayState) {
+      case _EventTrayState.expanded:
+        return 338.h;
+      case _EventTrayState.collapsed:
+        return 112.h;
+      case _EventTrayState.dismissed:
+        return 62.h;
+    }
+  }
+
   void _openEvent(EventModel event) {
     Navigation.pushNamed(Routes.detailsScreen, arg: event);
   }
+}
+
+class _DaylightResult {
+  const _DaylightResult({
+    required this.isDaylight,
+    required this.nextBoundary,
+  });
+
+  final bool isDaylight;
+  final DateTime nextBoundary;
 }
 
 class _MapHeader extends StatelessWidget {
@@ -1027,139 +1188,265 @@ class _SelectedEventCard extends StatelessWidget {
   }
 }
 
-class _EventTray extends StatelessWidget {
+class _EventTray extends StatefulWidget {
   const _EventTray({
     required this.events,
     required this.zipFilter,
-    required this.isExpanded,
-    required this.onToggleExpanded,
+    required this.state,
+    required this.onStateChanged,
     required this.onTapEvent,
   });
 
   final List<EventModel> events;
   final String zipFilter;
-  final bool isExpanded;
-  final VoidCallback onToggleExpanded;
+  final _EventTrayState state;
+  final ValueChanged<_EventTrayState> onStateChanged;
   final ValueChanged<EventModel> onTapEvent;
 
   @override
-  Widget build(BuildContext context) {
-    final double height = isExpanded ? 324.h : 84.h;
+  State<_EventTray> createState() => _EventTrayStatefulState();
+}
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      height: height,
-      margin: EdgeInsets.symmetric(horizontal: 14.w),
-      padding: EdgeInsets.fromLTRB(13.w, 10.h, 13.w, 13.h),
-      decoration: BoxDecoration(
-        color: const Color(0xF20C0D13),
-        borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: Colors.white.withOpacity(0.14)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.42),
-            blurRadius: 24.r,
-            offset: Offset(0, 10.h),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
+class _EventTrayStatefulState extends State<_EventTray> {
+  final DraggableScrollableController _controller =
+      DraggableScrollableController();
+
+  static const double _collapsedSize = 0.16;
+  static const double _expandedSize = 0.58;
+  static const double _dismissThreshold = 0.095;
+
+  @override
+  void didUpdateWidget(covariant _EventTray oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state &&
+        widget.state != _EventTrayState.dismissed &&
+        _controller.isAttached) {
+      _controller.animateTo(
+        widget.state == _EventTrayState.expanded
+            ? _expandedSize
+            : _collapsedSize,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.state == _EventTrayState.dismissed) {
+      return SafeArea(
+        top: false,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: onToggleExpanded,
-            child: Column(
-              children: [
-                Center(
-                  child: Container(
+            onTap: () => widget.onStateChanged(_EventTrayState.collapsed),
+            onVerticalDragEnd: (details) {
+              if ((details.primaryVelocity ?? 0) < -80) {
+                widget.onStateChanged(_EventTrayState.collapsed);
+              }
+            },
+            child: Container(
+              margin: EdgeInsets.only(bottom: 8.h),
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
+              decoration: BoxDecoration(
+                color: const Color(0xF20C0D13),
+                borderRadius: BorderRadius.circular(99.r),
+                border: Border.all(color: Colors.white.withOpacity(0.16)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.28),
+                    blurRadius: 16.r,
+                    offset: Offset(0, 8.h),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 30.w,
                     height: 4.h,
-                    width: 42.w,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.20),
+                      color: Colors.white.withOpacity(0.26),
                       borderRadius: BorderRadius.circular(99.r),
                     ),
                   ),
-                ),
-                8.h.verticalSpace,
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CommonText(
-                            text: zipFilter.isEmpty
-                                ? 'Map events'
-                                : 'Events near $zipFilter',
-                            color: AppColors.textColor,
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.w800,
-                            maxLine: 1,
-                            softWrap: false,
-                          ),
-                          2.h.verticalSpace,
-                          CommonText(
-                            text:
-                                '${events.length} event${events.length == 1 ? '' : 's'} represented',
-                            color: AppColors.textLightColor,
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                            maxLine: 1,
-                            softWrap: false,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      height: 32.w,
-                      width: 32.w,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.07),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isExpanded
-                            ? Icons.keyboard_arrow_down_rounded
-                            : Icons.keyboard_arrow_up_rounded,
-                        color: AppColors.textLightColor,
-                        size: 24.sp,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  10.w.horizontalSpace,
+                  CommonText(
+                    text:
+                        '${widget.events.length} event${widget.events.length == 1 ? '' : 's'}',
+                    color: AppColors.textColor,
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  4.w.horizontalSpace,
+                  Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    color: AppColors.textLightColor,
+                    size: 18.sp,
+                  ),
+                ],
+              ),
             ),
           ),
-          if (isExpanded) ...[
-            12.h.verticalSpace,
-            Expanded(
-              child: events.isEmpty
-                  ? Center(
-                      child: CommonText(
-                        text: 'Try another ZIP code or clear the search.',
-                        color: AppColors.textLightColor,
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w700,
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: events.length,
-                      separatorBuilder: (_, __) => 10.h.verticalSpace,
-                      itemBuilder: (context, index) {
-                        final EventModel event = events[index];
-                        return _TrayEventCard(
-                          event: event,
-                          onTap: () => onTapEvent(event),
+        ),
+      );
+    }
+
+    final bool isExpanded = widget.state == _EventTrayState.expanded;
+
+    return NotificationListener<DraggableScrollableNotification>(
+      onNotification: (notification) {
+        if (notification.extent <= _dismissThreshold) {
+          widget.onStateChanged(_EventTrayState.dismissed);
+        } else if (notification.extent > 0.36 &&
+            widget.state != _EventTrayState.expanded) {
+          widget.onStateChanged(_EventTrayState.expanded);
+        } else if (notification.extent <= 0.24 &&
+            widget.state != _EventTrayState.collapsed) {
+          widget.onStateChanged(_EventTrayState.collapsed);
+        }
+        return false;
+      },
+      child: DraggableScrollableSheet(
+        controller: _controller,
+        initialChildSize: isExpanded ? _expandedSize : _collapsedSize,
+        minChildSize: 0.075,
+        maxChildSize: _expandedSize,
+        snap: true,
+        snapSizes: const <double>[_collapsedSize, _expandedSize],
+        builder: (context, scrollController) {
+          return SafeArea(
+            top: false,
+            child: Container(
+              margin: EdgeInsets.fromLTRB(14.w, 0, 14.w, 8.h),
+              decoration: BoxDecoration(
+                color: const Color(0xF20C0D13),
+                borderRadius: BorderRadius.circular(18.r),
+                border: Border.all(color: Colors.white.withOpacity(0.14)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.42),
+                    blurRadius: 24.r,
+                    offset: Offset(0, 10.h),
+                  ),
+                ],
+              ),
+              child: CustomScrollView(
+                controller: scrollController,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        widget.onStateChanged(
+                          isExpanded
+                              ? _EventTrayState.collapsed
+                              : _EventTrayState.expanded,
                         );
                       },
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(13.w, 10.h, 13.w, 10.h),
+                        child: Column(
+                          children: [
+                            Center(
+                              child: Container(
+                                height: 4.h,
+                                width: 42.w,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.20),
+                                  borderRadius: BorderRadius.circular(99.r),
+                                ),
+                              ),
+                            ),
+                            8.h.verticalSpace,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      CommonText(
+                                        text: widget.zipFilter.isEmpty
+                                            ? 'Map events'
+                                            : 'Events near ${widget.zipFilter}',
+                                        color: AppColors.textColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w800,
+                                        maxLine: 1,
+                                        softWrap: false,
+                                      ),
+                                      2.h.verticalSpace,
+                                      CommonText(
+                                        text:
+                                            '${widget.events.length} event${widget.events.length == 1 ? '' : 's'} represented',
+                                        color: AppColors.textLightColor,
+                                        fontSize: 12.sp,
+                                        fontWeight: FontWeight.w600,
+                                        maxLine: 1,
+                                        softWrap: false,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  isExpanded
+                                      ? Icons.keyboard_arrow_down_rounded
+                                      : Icons.keyboard_arrow_up_rounded,
+                                  color: AppColors.textLightColor,
+                                  size: 24.sp,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
+                  ),
+                  if (widget.events.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(18.w),
+                          child: CommonText(
+                            text: 'Try another ZIP code or clear the search.',
+                            color: AppColors.textLightColor,
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w700,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(13.w, 0, 13.w, 13.h),
+                      sliver: SliverList.separated(
+                        itemCount: widget.events.length,
+                        separatorBuilder: (_, __) => 10.h.verticalSpace,
+                        itemBuilder: (context, index) {
+                          final EventModel event = widget.events[index];
+                          return _TrayEventCard(
+                            event: event,
+                            onTap: () => widget.onTapEvent(event),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ],
-        ],
+          );
+        },
       ),
     );
   }
@@ -1299,6 +1586,26 @@ String _eventLocation(EventModel event) {
       .where((String value) => value.isNotEmpty)
       .toList();
   return parts.join(', ');
+}
+
+double _degreesToRadians(double degrees) => degrees * math.pi / 180;
+
+double _radiansToDegrees(double radians) => radians * 180 / math.pi;
+
+double _normalizeDegrees(double degrees) {
+  double normalized = degrees % 360;
+  if (normalized < 0) {
+    normalized += 360;
+  }
+  return normalized;
+}
+
+double _normalizeHours(double hours) {
+  double normalized = hours % 24;
+  if (normalized < 0) {
+    normalized += 24;
+  }
+  return normalized;
 }
 
 const String _dayMapStyle = '''
