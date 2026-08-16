@@ -79,6 +79,9 @@ jobs:
         continue-on-error: true
         run: flutter analyze
 
+      - name: Install FlutterFire CLI
+        run: dart pub global activate flutterfire_cli
+
       - name: Install Apple signing certificate and profile
         run: |
           CERTIFICATE_PATH="$RUNNER_TEMP/ios_distribution.p12"
