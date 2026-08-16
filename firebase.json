@@ -1,4 +1,33 @@
 {
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "free2b-b6221",
+          "appId": "1:1039187320593:android:0974fed67c137aca92b6b0",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "free2b-b6221",
+          "appId": "1:1039187320593:ios:96d310387425b51e92b6b0",
+          "uploadDebugSymbols": true,
+          "fileOutput": "Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "free2b-b6221",
+          "configurations": {
+            "android": "1:1039187320593:android:0974fed67c137aca92b6b0",
+            "ios": "1:1039187320593:ios:96d310387425b51e92b6b0",
+            "web": "1:1039187320593:web:1be9fd30c467226092b6b0"
+          }
+        }
+      }
+    }
+  },
   "hosting": {
     "target": "flutter",
     "public": "build/web",
