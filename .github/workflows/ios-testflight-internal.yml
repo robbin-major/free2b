@@ -161,10 +161,34 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Add method string app-store' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c 'Add signingStyle string manual' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c "Add teamID string $APPLE_TEAM_ID" ios/ExportOptions.plist
+          /usr/libexec/PlistBuddy -c 'Add signingCertificate string Apple Distribution' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c 'Add uploadBitcode bool false' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c 'Add uploadSymbols bool true' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c 'Add provisioningProfiles dict' ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c "Add provisioningProfiles:$BUNDLE_ID string $IOS_PROFILE_NAME" ios/ExportOptions.plist
+
+      - name: Configure App Store archive signing
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+
+          project_path = pathlib.Path("ios/Runner.xcodeproj/project.pbxproj")
+          project = project_path.read_text()
+          project = project.replace(
+              '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";',
+              '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";',
+          )
+
+          development_team = f"DEVELOPMENT_TEAM = {os.environ['APPLE_TEAM_ID']};"
+          signing_settings = (
+              f"{development_team}\n"
+              "\t\t\t\t\tCODE_SIGN_STYLE = Manual;\n"
+              f"\t\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"{os.environ['IOS_PROFILE_NAME']}\";"
+          )
+          project = project.replace(development_team, signing_settings)
+          project_path.write_text(project)
+          PY
 
       - name: Build signed IPA
         run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
