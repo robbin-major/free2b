@@ -29,7 +29,7 @@ class MapScreen extends StatefulWidget {
 enum _EventTrayState { expanded, collapsed, dismissed }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
-  static const bool _useDefaultMapStyleForDiagnostic = true;
+  static const bool _useDefaultMapStyleForDiagnostic = false;
   static const String _diagnosticLogPrefix = 'Free2BMap';
   static const LatLng _defaultCenter = LatLng(41.8781, -87.6298);
   static const CameraPosition _defaultCamera = CameraPosition(
@@ -49,14 +49,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Worker? _eventWorker;
   Timer? _zipDebounce;
   Timer? _daylightTimer;
-  bool _isNight = false;
-  bool _hasManualMapMode = false;
+  bool _isNight = true;
+  bool _hasManualMapMode = true;
   _EventTrayState _trayState = _EventTrayState.collapsed;
   bool _isResolvingLocations = false;
   bool _isZipLoading = false;
   bool _isLocating = false;
   bool _mapCreated = false;
   bool _mapCameraSettled = false;
+  int _locationResolutionGeneration = 0;
   String _zipFilter = '';
   String? _mapMessage;
   String? _locationMessage;
@@ -82,7 +83,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _eventWorker = ever<List<EventModel>>(_homeController.eventData, (_) {
       _resolveVisibleEventLocations();
     });
-    _applyAutomaticMapMode();
   }
 
   @override
@@ -109,7 +109,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final List<MapEventLocation> visibleEvents = _visibleEventLocations();
 
     return Scaffold(
-      backgroundColor: _isNight ? const Color(0xFF060812) : const Color(0xFFF3F6FA),
+      backgroundColor: AppColors.mapBackground,
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -140,13 +140,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 zipController: _zipController,
                 zipFocusNode: _zipFocusNode,
                 isZipLoading: _isZipLoading,
-                onModeChanged: _changeMapMode,
                 onZipChanged: _onZipChanged,
                 onZipSubmitted: _applyZipSearch,
                 onSearchTap: () => _zipFocusNode.requestFocus(),
-                onFilterTap: () {
-                  setState(() => _trayState = _EventTrayState.expanded);
-                },
+                onFilterTap: () => setState(
+                  () => _trayState = _EventTrayState.expanded,
+                ),
                 onClearZip: _zipFilter.isEmpty && _zipController.text.isEmpty
                     ? null
                     : _clearZipSearch,
@@ -488,6 +487,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _resolveVisibleEventLocations() async {
+    final int generation = ++_locationResolutionGeneration;
     setState(() {
       _isResolvingLocations = true;
       _mapMessage = null;
@@ -497,7 +497,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final List<MapEventLocation> resolved =
         await _locationService.resolveEventLocations(events);
 
-    if (!mounted) {
+    if (!mounted || generation != _locationResolutionGeneration) {
       return;
     }
 
@@ -544,8 +544,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Set<Marker> _buildMarkers(List<MapEventLocation> locations) {
     return locations.map((MapEventLocation item) {
-      final bool selected = _selectedEvent?.eventID == item.event.eventID &&
-          (item.event.eventID ?? '').isNotEmpty;
+      final String selectedId = (_selectedEvent?.eventID ?? '').trim();
+      final bool selected = identical(_selectedEvent, item.event) ||
+          (selectedId.isNotEmpty && selectedId == item.event.eventID);
       return Marker(
         markerId: MarkerId(_markerIdFor(item.event)),
         position: item.position,
@@ -562,6 +563,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _selectEvent(MapEventLocation item) async {
     setState(() {
       _selectedEvent = item.event;
+      _trayState = _EventTrayState.collapsed;
       _markers = _buildMarkers(_visibleEventLocations());
     });
     await _mapController?.animateCamera(
@@ -733,6 +735,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       maxLng = math.max(maxLng, event.position.longitude);
     }
 
+    // Google Maps rejects zero-area bounds when separate events share a venue.
+    const double minimumSpan = 0.002;
+    if ((maxLat - minLat).abs() < minimumSpan) {
+      minLat -= minimumSpan;
+      maxLat += minimumSpan;
+    }
+    if ((maxLng - minLng).abs() < minimumSpan) {
+      minLng -= minimumSpan;
+      maxLng += minimumSpan;
+    }
+
     await controller.animateCamera(
       CameraUpdate.newLatLngBounds(
         LatLngBounds(
@@ -770,7 +783,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       case _EventTrayState.expanded:
         return 338.h;
       case _EventTrayState.collapsed:
-        return 112.h;
+        return 82.h;
       case _EventTrayState.dismissed:
         return 62.h;
     }
@@ -797,7 +810,6 @@ class _MapHeader extends StatelessWidget {
     required this.zipController,
     required this.zipFocusNode,
     required this.isZipLoading,
-    required this.onModeChanged,
     required this.onZipChanged,
     required this.onZipSubmitted,
     required this.onSearchTap,
@@ -809,7 +821,6 @@ class _MapHeader extends StatelessWidget {
   final TextEditingController zipController;
   final FocusNode zipFocusNode;
   final bool isZipLoading;
-  final ValueChanged<bool> onModeChanged;
   final ValueChanged<String> onZipChanged;
   final ValueChanged<String> onZipSubmitted;
   final VoidCallback onSearchTap;
@@ -819,7 +830,7 @@ class _MapHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color surface =
-        isNight ? const Color(0xE80B0F18) : Colors.white.withOpacity(0.95);
+        isNight ? AppColors.mapSurface : Colors.white.withOpacity(0.95);
     final Color textColor = isNight ? AppColors.textColor : const Color(0xFF172033);
     final Color muted =
         isNight ? AppColors.textLightColor : const Color(0xFF637083);
@@ -836,7 +847,7 @@ class _MapHeader extends StatelessWidget {
             const Spacer(),
             CommonText(
               text: 'Free2B',
-              color: const Color(0xFFFF58F3),
+              color: AppColors.mapAccent,
               fontSize: 25.sp,
               fontWeight: FontWeight.w800,
             ),
@@ -869,19 +880,6 @@ class _MapHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _ModePill(
-                label: 'Night',
-                icon: Icons.dark_mode_rounded,
-                selected: isNight,
-                onTap: () => onModeChanged(true),
-              ),
-              _ModePill(
-                label: 'Day',
-                icon: Icons.light_mode_rounded,
-                selected: !isNight,
-                onTap: () => onModeChanged(false),
-              ),
-              8.w.horizontalSpace,
               Expanded(
                 child: SizedBox(
                   height: 38.h,
@@ -917,7 +915,7 @@ class _MapHeader extends StatelessWidget {
                           ? Padding(
                               padding: EdgeInsets.all(11.w),
                               child: CircularProgressIndicator(
-                                color: const Color(0xFFFF58F3),
+                                color: AppColors.mapAccent,
                                 strokeWidth: 2,
                               ),
                             )
@@ -948,61 +946,6 @@ class _MapHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ModePill extends StatelessWidget {
-  const _ModePill({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 38.h,
-        padding: EdgeInsets.symmetric(horizontal: 11.w),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF5B23E5) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12.r),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFFF58F3).withOpacity(0.28),
-                    blurRadius: 14.r,
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.white : AppColors.textLightColor,
-              size: 16.sp,
-            ),
-            5.w.horizontalSpace,
-            CommonText(
-              text: label,
-              color: selected ? Colors.white : AppColors.textLightColor,
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w800,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1067,7 +1010,7 @@ class _MapFloatingButton extends StatelessWidget {
           height: 44.w,
           width: 44.w,
           decoration: BoxDecoration(
-            color: isNight ? const Color(0xE80B0F18) : Colors.white,
+            color: isNight ? AppColors.mapSurface : Colors.white,
             shape: BoxShape.circle,
             border: Border.all(
               color: isNight
@@ -1086,7 +1029,7 @@ class _MapFloatingButton extends StatelessWidget {
               ? Padding(
                   padding: EdgeInsets.all(12.w),
                   child: CircularProgressIndicator(
-                    color: const Color(0xFF2D9BFF),
+                    color: AppColors.mapLocation,
                     strokeWidth: 2,
                   ),
                 )
@@ -1117,7 +1060,7 @@ class _MapStatusPill extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
       decoration: BoxDecoration(
-        color: isNight ? const Color(0xE80B0F18) : Colors.white,
+        color: isNight ? AppColors.mapSurface : Colors.white,
         borderRadius: BorderRadius.circular(24.r),
         border: Border.all(color: Colors.white.withOpacity(isNight ? 0.12 : 0)),
       ),
@@ -1129,7 +1072,7 @@ class _MapStatusPill extends StatelessWidget {
               height: 14.w,
               width: 14.w,
               child: CircularProgressIndicator(
-                color: const Color(0xFFFF58F3),
+                color: AppColors.mapAccent,
                 strokeWidth: 2,
               ),
             ),
@@ -1163,7 +1106,7 @@ class _MapMessageCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(12.w, 10.h, 8.w, 10.h),
       decoration: BoxDecoration(
-        color: isNight ? const Color(0xF20B0F18) : Colors.white,
+        color: isNight ? AppColors.mapSurface : Colors.white,
         borderRadius: BorderRadius.circular(14.r),
         border: Border.all(
           color: isNight ? Colors.white.withOpacity(0.14) : const Color(0xFFE1E6EF),
@@ -1217,15 +1160,15 @@ class _SelectedEventCard extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(10.w),
         decoration: BoxDecoration(
-          color: isNight ? const Color(0xF20B0F18) : Colors.white,
+          color: isNight ? AppColors.mapSurface : Colors.white,
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: const Color(0xFFFF58F3).withOpacity(isNight ? 0.72 : 0.34),
+            color: AppColors.mapAccent.withOpacity(isNight ? 0.72 : 0.34),
             width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFF58F3).withOpacity(isNight ? 0.26 : 0.12),
+              color: AppColors.mapAccent.withOpacity(isNight ? 0.26 : 0.12),
               blurRadius: 22.r,
               offset: Offset(0, 10.h),
             ),
@@ -1266,7 +1209,7 @@ class _SelectedEventCard extends StatelessWidget {
                     5.h.verticalSpace,
                     CommonText(
                       text: location,
-                      color: const Color(0xFF2D9BFF),
+                      color: AppColors.mapLocation,
                       fontSize: 12.sp,
                       fontWeight: FontWeight.w800,
                       maxLine: 1,
@@ -1315,9 +1258,9 @@ class _EventTrayStatefulState extends State<_EventTray> {
   final DraggableScrollableController _controller =
       DraggableScrollableController();
 
-  static const double _collapsedSize = 0.16;
-  static const double _expandedSize = 0.58;
-  static const double _dismissThreshold = 0.095;
+  static const double _collapsedSize = 0.105;
+  static const double _expandedSize = 0.52;
+  static const double _dismissThreshold = 0.07;
 
   @override
   void didUpdateWidget(covariant _EventTray oldWidget) {
@@ -1360,7 +1303,7 @@ class _EventTrayStatefulState extends State<_EventTray> {
               margin: EdgeInsets.only(bottom: 8.h),
               padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
               decoration: BoxDecoration(
-                color: const Color(0xF20C0D13),
+                color: AppColors.mapSurface,
                 borderRadius: BorderRadius.circular(99.r),
                 border: Border.all(color: Colors.white.withOpacity(0.16)),
                 boxShadow: [
@@ -1410,10 +1353,10 @@ class _EventTrayStatefulState extends State<_EventTray> {
       onNotification: (notification) {
         if (notification.extent <= _dismissThreshold) {
           widget.onStateChanged(_EventTrayState.dismissed);
-        } else if (notification.extent > 0.36 &&
+        } else if (notification.extent > 0.32 &&
             widget.state != _EventTrayState.expanded) {
           widget.onStateChanged(_EventTrayState.expanded);
-        } else if (notification.extent <= 0.24 &&
+        } else if (notification.extent <= 0.20 &&
             widget.state != _EventTrayState.collapsed) {
           widget.onStateChanged(_EventTrayState.collapsed);
         }
@@ -1422,7 +1365,7 @@ class _EventTrayStatefulState extends State<_EventTray> {
       child: DraggableScrollableSheet(
         controller: _controller,
         initialChildSize: isExpanded ? _expandedSize : _collapsedSize,
-        minChildSize: 0.075,
+        minChildSize: 0.055,
         maxChildSize: _expandedSize,
         snap: true,
         snapSizes: const <double>[_collapsedSize, _expandedSize],
@@ -1432,9 +1375,9 @@ class _EventTrayStatefulState extends State<_EventTray> {
             child: Container(
               margin: EdgeInsets.fromLTRB(14.w, 0, 14.w, 8.h),
               decoration: BoxDecoration(
-                color: const Color(0xF20C0D13),
+                color: AppColors.mapSurface,
                 borderRadius: BorderRadius.circular(18.r),
-                border: Border.all(color: Colors.white.withOpacity(0.14)),
+                border: Border.all(color: AppColors.mapBorder),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.42),
@@ -1612,7 +1555,7 @@ class _TrayEventCard extends StatelessWidget {
                     4.h.verticalSpace,
                     CommonText(
                       text: location,
-                      color: const Color(0xFF2D9BFF),
+                      color: AppColors.mapLocation,
                       fontSize: 11.sp,
                       fontWeight: FontWeight.w800,
                       maxLine: 1,
@@ -1646,7 +1589,7 @@ class _EmptyMapState extends StatelessWidget {
       width: 250.w,
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: isNight ? const Color(0xE80A0D14) : Colors.white.withOpacity(0.96),
+        color: isNight ? AppColors.mapSurface : Colors.white.withOpacity(0.96),
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(
           color: isNight ? Colors.white.withOpacity(0.12) : const Color(0xFFE1E6EF),

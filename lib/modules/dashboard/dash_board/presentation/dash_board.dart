@@ -24,13 +24,17 @@ class DashBoard extends StatelessWidget {
     return Scaffold(
       bottomNavigationBar: Obx(
         () {
-          SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(systemNavigationBarColor: AppColors.backgroundLightColor));
+          SystemChrome.setSystemUIOverlayStyle(
+            const SystemUiOverlayStyle(
+              systemNavigationBarColor: AppColors.surface,
+            ),
+          );
           return BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
-            backgroundColor: AppColors.backgroundLightColor,
-            selectedItemColor: AppColors.textColor,
+            backgroundColor: AppColors.surface,
+            selectedItemColor: AppColors.textPrimary,
             currentIndex: _dashBoardController.currentIndex.value,
-            unselectedItemColor: AppColors.unselectedIconColor,
+            unselectedItemColor: AppColors.textSecondary,
             showUnselectedLabels: true,
             selectedLabelStyle: TextStyle(fontSize: 11.sp),
             unselectedLabelStyle: TextStyle(fontSize: 11.sp),
@@ -75,8 +79,8 @@ class DashBoard extends StatelessWidget {
                 icon: Icon(
                   Icons.map_rounded,
                   color: _dashBoardController.currentIndex.value == 2
-                      ? AppColors.yellowButtonColor
-                      : AppColors.unselectedIconColor,
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
                   size: 24.sp,
                 ).paddingOnly(bottom: 6.h, top: 6.h),
                 label: AppString.map.tr,
@@ -86,8 +90,8 @@ class DashBoard extends StatelessWidget {
                 icon: Icon(
                   Icons.chat_bubble_outline_rounded,
                   color: _dashBoardController.currentIndex.value == 3
-                      ? AppColors.textColor
-                      : AppColors.unselectedIconColor,
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
                   size: 23.sp,
                 ).paddingOnly(bottom: 6.h, top: 6.h),
                 label: AppString.messages.tr,

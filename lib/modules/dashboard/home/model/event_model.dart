@@ -133,6 +133,7 @@ class EventModel {
         startDate: json["startDate"],
         endDate: json["endDate"] ?? json["endDateTime"] ?? json["endTime"],
         status: json["status"],
+        eventID: json["eventID"] ?? json["eventId"] ?? json["id"],
         // category: json["category"] == null ? [] : List<Category>.from(json["category"]!.map((x) => x)),
         category: json["category"] == null
             ? []
@@ -162,6 +163,7 @@ class EventModel {
         "startDate": startDate ?? '',
         "endDate": endDate ?? '',
         "status": status ?? '',
+        "eventID": eventID ?? '',
         "category": category == null
             ? []
             : List<dynamic>.from(category?.map((x) => x.toJson()) ?? []),

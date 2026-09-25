@@ -36,12 +36,14 @@ class CommonText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle baseStyle =
+        Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
     return Text(
       text.tr,
       textAlign: textAlign,
       maxLines: maxLine,
       softWrap: softWrap,
-      style: TextStyle(
+      style: baseStyle.copyWith(
         overflow: overflow,
         color: color ?? AppColors.textColor,
         fontSize: fontSize,
