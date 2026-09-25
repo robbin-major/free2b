@@ -25,6 +25,15 @@ class EventModel {
   final String? eventID;
   final List<Category>? category;
   final String? categoryType;
+  final String? source;
+  final String? sourceId;
+  final String? sourceUrl;
+  final String? type;
+  final List<String>? sourceTypes;
+  final List<String>? sourceTags;
+  final List<String>? audiences;
+  final List<String>? languages;
+  final String? programName;
   final double? latitude;
   final double? longitude;
 
@@ -47,6 +56,15 @@ class EventModel {
     this.eventID,
     this.category,
     this.categoryType,
+    this.source,
+    this.sourceId,
+    this.sourceUrl,
+    this.type,
+    this.sourceTypes,
+    this.sourceTags,
+    this.audiences,
+    this.languages,
+    this.programName,
     this.latitude,
     this.longitude,
   });
@@ -72,6 +90,15 @@ class EventModel {
         zipCode: zipCode,
         category: category,
         categoryType: categoryType,
+        source: source,
+        sourceId: sourceId,
+        sourceUrl: sourceUrl,
+        type: type,
+        sourceTypes: sourceTypes,
+        sourceTags: sourceTags,
+        audiences: audiences,
+        languages: languages,
+        programName: programName,
         latitude: latitude,
         longitude: longitude,
       );
@@ -96,6 +123,15 @@ class EventModel {
     String? eventID,
     List<Category>? category,
     String? categoryType,
+    String? source,
+    String? sourceId,
+    String? sourceUrl,
+    String? type,
+    List<String>? sourceTypes,
+    List<String>? sourceTags,
+    List<String>? audiences,
+    List<String>? languages,
+    String? programName,
     String? zipCode,
     double? latitude,
     double? longitude,
@@ -119,6 +155,15 @@ class EventModel {
         zipCode: zipCode ?? this.zipCode,
         category: category ?? this.category,
         categoryType: categoryType ?? this.categoryType,
+        source: source ?? this.source,
+        sourceId: sourceId ?? this.sourceId,
+        sourceUrl: sourceUrl ?? this.sourceUrl,
+        type: type ?? this.type,
+        sourceTypes: sourceTypes ?? this.sourceTypes,
+        sourceTags: sourceTags ?? this.sourceTags,
+        audiences: audiences ?? this.audiences,
+        languages: languages ?? this.languages,
+        programName: programName ?? this.programName,
         latitude: latitude ?? this.latitude,
         longitude: longitude ?? this.longitude,
       );
@@ -151,6 +196,15 @@ class EventModel {
 
         zipCode: json["zipCode"],
         categoryType: json["categoryType"],
+        source: json["source"],
+        sourceId: json["sourceId"]?.toString(),
+        sourceUrl: json["sourceUrl"],
+        type: json["type"],
+        sourceTypes: _readStringList(json["sourceTypes"] ?? json["eventTypes"]),
+        sourceTags: _readStringList(json["sourceTags"] ?? json["tags"]),
+        audiences: _readStringList(json["audiences"] ?? json["eventAudiences"]),
+        languages: _readStringList(json["languages"] ?? json["eventLanguages"]),
+        programName: json["programName"],
         latitude: _readLatitude(json),
         longitude: _readLongitude(json),
       );
@@ -179,9 +233,35 @@ class EventModel {
             : List<dynamic>.from(category?.map((x) => x.toJson()) ?? []),
         "zipCode": zipCode ?? '',
         "categoryType": categoryType ?? '',
+        "source": source ?? '',
+        "sourceId": sourceId ?? '',
+        "sourceUrl": sourceUrl ?? '',
+        "type": type ?? '',
+        "sourceTypes": sourceTypes ?? const <String>[],
+        "sourceTags": sourceTags ?? const <String>[],
+        "audiences": audiences ?? const <String>[],
+        "languages": languages ?? const <String>[],
+        "programName": programName ?? '',
         "latitude": latitude,
         "longitude": longitude,
       };
+}
+
+List<String> _readStringList(Object? value) {
+  if (value is List) {
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value
+        .split(RegExp(r'[|,]'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  return const <String>[];
 }
 
 double? _readLatitude(Map<String, dynamic> json) {

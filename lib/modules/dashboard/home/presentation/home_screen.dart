@@ -8,6 +8,7 @@ import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/event_interest_classifier.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/common_text.dart';
@@ -51,6 +52,8 @@ class HomeScreen extends StatelessWidget {
                   onRefresh: _homeController.getEvent,
                   onTapEvent: _openEvent,
                   onTapCategory: _searchCategory,
+                  showAllInterests: _homeController.showAllInterests.value,
+                  onToggleInterests: _homeController.toggleAllInterests,
                 );
               }),
             ),
@@ -61,8 +64,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   void _searchCategory(String category) {
-    _homeController.textEditingController.text = category;
-    _homeController.searchEvent(value: category);
+    _homeController.filterByInterest(category);
   }
 
   void _openEvent(EventModel event) {
@@ -217,12 +219,16 @@ class _CuratedHome extends StatelessWidget {
     required this.onRefresh,
     required this.onTapEvent,
     required this.onTapCategory,
+    required this.showAllInterests,
+    required this.onToggleInterests,
   });
 
   final List<EventModel> events;
   final Future<void> Function() onRefresh;
   final ValueChanged<EventModel> onTapEvent;
   final ValueChanged<String> onTapCategory;
+  final bool showAllInterests;
+  final VoidCallback onToggleInterests;
 
   @override
   Widget build(BuildContext context) {
@@ -233,6 +239,8 @@ class _CuratedHome extends StatelessWidget {
         .take(10)
         .toList();
     final List<String> categories = _categoriesFrom(sortedEvents);
+    final List<String> visibleCategories =
+        showAllInterests ? categories : categories.take(6).toList();
 
     if (featured == null) {
       return _EmptyHome(onRefresh: onRefresh);
@@ -291,7 +299,7 @@ class _CuratedHome extends StatelessWidget {
                   Wrap(
                     spacing: 8.w,
                     runSpacing: 8.h,
-                    children: categories
+                    children: visibleCategories
                         .map(
                           (category) => _InterestChip(
                             label: category,
@@ -300,6 +308,22 @@ class _CuratedHome extends StatelessWidget {
                         )
                         .toList(),
                   ),
+                  if (categories.length > 6) ...[
+                    10.h.verticalSpace,
+                    TextButton(
+                      onPressed: onToggleInterests,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: EdgeInsets.symmetric(horizontal: 4.w),
+                      ),
+                      child: CommonText(
+                        text: showAllInterests ? 'Show less' : 'See all',
+                        color: AppColors.primary,
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ],
               ]),
             ),
@@ -780,15 +804,21 @@ EventModel? _featuredEvent(List<EventModel> events) {
 }
 
 List<String> _categoriesFrom(List<EventModel> events) {
-  final Set<String> categories = <String>{};
+  final Map<String, int> interestCounts = <String, int>{};
   for (final EventModel event in events) {
-    for (final category in event.category ?? <Category>[]) {
-      final String name = (category.categoryName ?? '').trim();
-      if (name.isNotEmpty) categories.add(name);
+    for (final String interest in EventInterestClassifier.classify(event)) {
+      interestCounts.update(interest, (count) => count + 1, ifAbsent: () => 1);
     }
   }
-  final List<String> sorted = categories.toList()..sort();
-  return sorted.take(8).toList();
+  final List<String> interests = interestCounts.keys.toList();
+  interests.sort((a, b) {
+    final int countComparison = interestCounts[b]!.compareTo(interestCounts[a]!);
+    if (countComparison != 0) return countComparison;
+    return Free2bInterest.values.indexOf(a).compareTo(
+          Free2bInterest.values.indexOf(b),
+        );
+  });
+  return interests;
 }
 
 bool _sameEvent(EventModel event, EventModel? other) {

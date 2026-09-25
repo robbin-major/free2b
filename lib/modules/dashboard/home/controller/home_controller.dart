@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/location_service.dart';
+import 'package:flutter_template/utils/event_interest_classifier.dart';
 import 'package:flutter_template/utils/utils.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:get/get.dart';
@@ -16,6 +17,7 @@ class HomeController extends GetxController {
   RxBool isEventLoading = false.obs;
   RxBool isLocationLoading = false.obs;
   RxBool isSearch = false.obs;
+  RxBool showAllInterests = false.obs;
   RxString locationLabel = ''.obs;
   RxString locationStatus = ''.obs;
   Timer? _debounce;
@@ -78,23 +80,26 @@ class HomeController extends GetxController {
       _debounce = Timer(const Duration(milliseconds: 500), () {
         searchEventData.clear();
         searchEventData.value = eventData
-            .where((p0) => (p0.zipCode?.contains(value) ?? false))
+            .where((event) => _matchesSearch(event, value))
             .toList();
-        if (searchEventData.value.isNotEmpty) {
-          return;
-        } else {
-          print("Search ${eventData.length}");
-          searchEventData.value = eventData.where((p0) {
-            final String? categoryName = _firstCategoryName(p0);
-            print("p0.category $categoryName");
-            return categoryName?.toLowerCase().contains(value.toLowerCase()) ??
-                false;
-          }).toList();
-        }
       });
     } else {
       isSearch.value = false;
+      searchEventData.clear();
     }
+  }
+
+  void filterByInterest(String interest) {
+    _debounce?.cancel();
+    textEditingController.text = interest;
+    searchEventData.value = eventData
+        .where((event) => EventInterestClassifier.matches(event, interest))
+        .toList();
+    isSearch.value = true;
+  }
+
+  void toggleAllInterests() {
+    showAllInterests.toggle();
   }
 
   Future<void> useCurrentLocation() async {
@@ -183,6 +188,29 @@ class HomeController extends GetxController {
       return null;
     }
     return categories.first.categoryName;
+  }
+
+  bool _matchesSearch(EventModel event, String query) {
+    final String normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return true;
+
+    final Iterable<String> searchable = <String>[
+      event.title ?? '',
+      event.zipCode ?? '',
+      event.venue ?? '',
+      event.city ?? '',
+      event.source ?? '',
+      ...?event.description,
+      ...?event.sourceTypes,
+      ...?event.sourceTags,
+      ...?event.audiences,
+      ...?event.category?.map((category) => category.categoryName ?? ''),
+      ...EventInterestClassifier.classify(event),
+    ];
+
+    return searchable.any(
+      (value) => value.toLowerCase().contains(normalizedQuery),
+    );
   }
 
   void clearLocationFilter() {
