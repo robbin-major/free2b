@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,8 +15,9 @@ import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/event_image.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -26,229 +26,143 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-enum _EventTrayState { expanded, collapsed, dismissed }
-
-class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
-  static const bool _useDefaultMapStyleForDiagnostic = false;
-  static const String _diagnosticLogPrefix = 'Free2BMap';
-  static const LatLng _defaultCenter = LatLng(41.8781, -87.6298);
-  static const CameraPosition _defaultCamera = CameraPosition(
-    target: _defaultCenter,
-    zoom: 11.6,
-  );
-  static const ClusterManagerId _eventClusterId =
-      ClusterManagerId('free2b_events');
-
+class _MapScreenState extends State<MapScreen> {
   late final HomeController _homeController;
-  late final ClusterManager _eventClusterManager;
   final MapEventLocationService _locationService = MapEventLocationService();
   final TextEditingController _zipController = TextEditingController();
   final FocusNode _zipFocusNode = FocusNode();
 
-  GoogleMapController? _mapController;
   Worker? _eventWorker;
   Timer? _zipDebounce;
-  Timer? _daylightTimer;
-  bool _isNight = true;
-  bool _hasManualMapMode = true;
-  _EventTrayState _trayState = _EventTrayState.collapsed;
   bool _isResolvingLocations = false;
   bool _isZipLoading = false;
   bool _isLocating = false;
-  bool _mapCreated = false;
-  bool _mapCameraSettled = false;
   int _locationResolutionGeneration = 0;
   String _zipFilter = '';
-  String? _mapMessage;
-  String? _locationMessage;
-  String? _mapDiagnosticError;
-  CameraPosition _lastCameraPosition = _defaultCamera;
-  Position? _userPosition;
-  EventModel? _selectedEvent;
+  String? _message;
+  String? _originLabel;
+  LatLng? _distanceOrigin;
   List<MapEventLocation> _resolvedEvents = <MapEventLocation>[];
-  Set<Marker> _markers = <Marker>{};
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _homeController = Get.isRegistered<HomeController>()
         ? Get.find<HomeController>()
         : Get.put(HomeController());
-    _eventClusterManager = ClusterManager(
-      clusterManagerId: _eventClusterId,
-      onClusterTap: _onClusterTap,
-    );
-    _resolveVisibleEventLocations();
+    _resolveEventLocations();
     _eventWorker = ever<List<EventModel>>(_homeController.eventData, (_) {
-      _resolveVisibleEventLocations();
+      _resolveEventLocations();
     });
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _zipDebounce?.cancel();
-    _daylightTimer?.cancel();
     _eventWorker?.dispose();
     _zipController.dispose();
     _zipFocusNode.dispose();
-    _mapController?.dispose();
     super.dispose();
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_hasManualMapMode) {
-      _applyAutomaticMapMode();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final List<MapEventLocation> visibleEvents = _visibleEventLocations();
+    final List<EventModel> visibleEvents = _visibleEvents();
 
     return Scaffold(
-      backgroundColor: AppColors.mapBackground,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned.fill(
-              child: GoogleMap(
-                initialCameraPosition: _defaultCamera,
-                mapType: MapType.normal,
-                markers: _markers,
-                clusterManagers: {_eventClusterManager},
-                myLocationEnabled: _userPosition != null,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                compassEnabled: true,
-                mapToolbarEnabled: false,
-                onMapCreated: _onMapCreated,
-                onCameraMove: _onCameraMove,
-                onCameraIdle: _onCameraIdle,
-                onTap: (_) => _clearSelectedEvent(),
-              ),
+            _DiscoveryHeader(
+              zipController: _zipController,
+              zipFocusNode: _zipFocusNode,
+              isZipLoading: _isZipLoading,
+              isLocating: _isLocating,
+              originLabel: _originLabel,
+              onZipChanged: _onZipChanged,
+              onZipSubmitted: _applyZipSearch,
+              onClearZip: _zipFilter.isEmpty && _zipController.text.isEmpty
+                  ? null
+                  : _clearZipSearch,
+              onUseLocation: _useCurrentLocation,
             ),
-            Positioned(
-              top: 10.h,
-              left: 14.w,
-              right: 14.w,
-              child: _MapHeader(
-                isNight: _isNight,
-                zipController: _zipController,
-                zipFocusNode: _zipFocusNode,
-                isZipLoading: _isZipLoading,
-                onZipChanged: _onZipChanged,
-                onZipSubmitted: _applyZipSearch,
-                onSearchTap: () => _zipFocusNode.requestFocus(),
-                onFilterTap: () => setState(
-                  () => _trayState = _EventTrayState.expanded,
+            if (_message != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
+                child: _DiscoveryMessage(
+                  message: _message!,
+                  onClose: () => setState(() => _message = null),
                 ),
-                onClearZip: _zipFilter.isEmpty && _zipController.text.isEmpty
-                    ? null
-                    : _clearZipSearch,
               ),
-            ),
-            Positioned(
-              top: 126.h,
-              right: 14.w,
-              child: Column(
+            Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 2.h, 18.w, 12.h),
+              child: Row(
                 children: [
-                  _MapFloatingButton(
-                    icon: Icons.my_location_rounded,
-                    tooltip: 'Recenter',
-                    isNight: _isNight,
-                    isLoading: _isLocating,
-                    onTap: _recenterToUser,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CommonText(
+                          text: _resultsTitle(visibleEvents.length),
+                          color: AppColors.textPrimary,
+                          fontSize: 20.sp,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        3.h.verticalSpace,
+                        CommonText(
+                          text: _resultsSubtitle(visibleEvents.length),
+                          color: AppColors.textSecondary,
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ],
+                    ),
                   ),
-                  10.h.verticalSpace,
-                  _MapFloatingButton(
-                    icon: Icons.layers_rounded,
-                    tooltip: _isNight ? 'Day map' : 'Night map',
-                    isNight: _isNight,
-                    onTap: () => _changeMapMode(!_isNight),
-                  ),
+                  if (_isResolvingLocations)
+                    SizedBox(
+                      height: 18.w,
+                      width: 18.w,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    ),
                 ],
               ),
             ),
-            if (_isResolvingLocations || _homeController.isEventLoading.value)
-              Positioned(
-                top: 128.h,
-                left: 14.w,
-                child: _MapStatusPill(
-                  text: 'Loading map events',
-                  isNight: _isNight,
-                  showSpinner: true,
-                ),
-              ),
-            if (_mapMessage != null || _locationMessage != null)
-              Positioned(
-                top: 128.h,
-                left: 14.w,
-                right: 72.w,
-                child: _MapMessageCard(
-                  message: _locationMessage ?? _mapMessage!,
-                  isNight: _isNight,
-                  onClose: () => setState(() {
-                    _mapMessage = null;
-                    _locationMessage = null;
-                  }),
-                ),
-              ),
-            if (_mapDiagnosticError != null)
-              Positioned(
-                top: 178.h,
-                left: 14.w,
-                right: 72.w,
-                child: _MapMessageCard(
-                  message: _mapDiagnosticError!,
-                  isNight: _isNight,
-                  onClose: () => setState(() {
-                    _mapDiagnosticError = null;
-                  }),
-                ),
-              ),
-            if (_selectedEvent != null)
-              Positioned(
-                left: 14.w,
-                right: 14.w,
-                bottom: _selectedEventBottomInset(),
-                child: _SelectedEventCard(
-                  event: _selectedEvent!,
-                  isNight: _isNight,
-                  onTap: () => _openEvent(_selectedEvent!),
-                  onClose: _clearSelectedEvent,
-                ),
-              ),
-            if (visibleEvents.isEmpty &&
-                !_isResolvingLocations &&
-                !_homeController.isEventLoading.value)
-              Center(
-                child: _EmptyMapState(
-                  isNight: _isNight,
-                  zipFilter: _zipFilter,
-                ),
-              ),
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: _trayState != _EventTrayState.expanded,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  opacity: _trayState == _EventTrayState.expanded ? 1 : 0,
-                  child: Container(color: Colors.transparent),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: _EventTray(
-                events: visibleEvents.map((item) => item.event).toList(),
-                zipFilter: _zipFilter,
-                state: _trayState,
-                onStateChanged: (state) => setState(() => _trayState = state),
-                onTapEvent: _openEvent,
-              ),
+            Expanded(
+              child: visibleEvents.isEmpty &&
+                      !_isResolvingLocations &&
+                      !_homeController.isEventLoading.value
+                  ? _EmptyDiscoveryState(
+                      hasFilter: _zipFilter.isNotEmpty,
+                      onClearFilter:
+                          _zipFilter.isNotEmpty ? _clearZipSearch : null,
+                    )
+                  : RefreshIndicator(
+                      color: AppColors.primary,
+                      backgroundColor: AppColors.surfaceElevated,
+                      onRefresh: _refreshEvents,
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 28.h),
+                        itemCount: visibleEvents.length,
+                        separatorBuilder: (_, __) => 12.h.verticalSpace,
+                        itemBuilder: (context, index) {
+                          final EventModel event = visibleEvents[index];
+                          final LatLng? position = _positionFor(event);
+                          return _DiscoveryEventCard(
+                            event: event,
+                            distance: _distanceLabel(position),
+                            canOpenDirections:
+                                position != null || _eventAddress(event).isNotEmpty,
+                            onTap: () => _openEvent(event),
+                            onDirections: () =>
+                                _openDirections(event, position),
+                          );
+                        },
+                      ),
+                    ),
             ),
           ],
         ),
@@ -256,246 +170,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _onMapCreated(GoogleMapController controller) async {
-    _mapController = controller;
-    setState(() {
-      _mapCreated = true;
-      _mapDiagnosticError = null;
-    });
-    _logMapDiagnostic(
-      'created defaultStyle=$_useDefaultMapStyleForDiagnostic '
-      'initialTarget=${_formatLatLng(_defaultCamera.target)} '
-      'initialZoom=${_defaultCamera.zoom.toStringAsFixed(1)} '
-      'markers=${_markers.length}',
-    );
-
-    try {
-      await _applyMapStyle();
-      await _fitMapToVisibleEvents();
-    } catch (error, stackTrace) {
-      _logMapDiagnostic('initialization failed: $error');
-      debugPrintStack(
-        label: '$_diagnosticLogPrefix initialization stack',
-        stackTrace: stackTrace,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _mapDiagnosticError =
-            'Internal map diagnostic: map initialization failed. '
-            'See device logs for $_diagnosticLogPrefix.';
-      });
-    }
+  Future<void> _refreshEvents() async {
+    await _homeController.getEvent();
+    await _resolveEventLocations();
   }
 
-  Future<void> _changeMapMode(bool isNight) async {
-    _daylightTimer?.cancel();
-    setState(() {
-      _hasManualMapMode = true;
-      _isNight = isNight;
-    });
-    await _applyMapStyle();
-  }
-
-  Future<void> _applyAutomaticMapMode() async {
-    if (_hasManualMapMode) {
-      return;
-    }
-
-    final _DaylightResult daylight = await _resolveCurrentDaylight();
-    if (!mounted || _hasManualMapMode) {
-      return;
-    }
-
-    setState(() => _isNight = !daylight.isDaylight);
-    await _applyMapStyle();
-    _scheduleNextDaylightCheck(daylight.nextBoundary);
-  }
-
-  Future<_DaylightResult> _resolveCurrentDaylight() async {
-    LatLng position = _defaultCenter;
-    try {
-      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      final LocationPermission permission = await Geolocator.checkPermission();
-      if (serviceEnabled &&
-          permission != LocationPermission.denied &&
-          permission != LocationPermission.deniedForever) {
-        final Position? known = await Geolocator.getLastKnownPosition();
-        if (known != null) {
-          position = LatLng(known.latitude, known.longitude);
-        } else {
-          final Position current = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.low,
-          ).timeout(const Duration(seconds: 4));
-          position = LatLng(current.latitude, current.longitude);
-        }
-      }
-    } catch (_) {
-      position = _defaultCenter;
-    }
-    return _calculateDaylight(position, DateTime.now());
-  }
-
-  _DaylightResult _calculateDaylight(LatLng position, DateTime now) {
-    final DateTime sunrise = _sunBoundary(position, now, true);
-    final DateTime sunset = _sunBoundary(position, now, false);
-    final bool isDaylight = !now.isBefore(sunrise) && now.isBefore(sunset);
-
-    DateTime nextBoundary;
-    if (now.isBefore(sunrise)) {
-      nextBoundary = sunrise;
-    } else if (now.isBefore(sunset)) {
-      nextBoundary = sunset;
-    } else {
-      nextBoundary = _sunBoundary(
-        position,
-        now.add(const Duration(days: 1)),
-        true,
-      );
-    }
-
-    return _DaylightResult(
-      isDaylight: isDaylight,
-      nextBoundary: nextBoundary,
-    );
-  }
-
-  DateTime _sunBoundary(LatLng position, DateTime date, bool sunrise) {
-    final int dayOfYear =
-        date.difference(DateTime(date.year, 1, 1)).inDays + 1;
-    final double lngHour = position.longitude / 15;
-    final double t = dayOfYear + ((sunrise ? 6 : 18) - lngHour) / 24;
-    final double meanAnomaly = (0.9856 * t) - 3.289;
-    double trueLongitude = meanAnomaly +
-        (1.916 * math.sin(_degreesToRadians(meanAnomaly))) +
-        (0.020 * math.sin(_degreesToRadians(2 * meanAnomaly))) +
-        282.634;
-    trueLongitude = _normalizeDegrees(trueLongitude);
-
-    double rightAscension = _radiansToDegrees(
-      math.atan(0.91764 * math.tan(_degreesToRadians(trueLongitude))),
-    );
-    rightAscension = _normalizeDegrees(rightAscension);
-    final double longitudeQuadrant = (trueLongitude / 90).floor() * 90;
-    final double ascensionQuadrant = (rightAscension / 90).floor() * 90;
-    rightAscension =
-        (rightAscension + longitudeQuadrant - ascensionQuadrant) / 15;
-
-    final double sinDeclination =
-        0.39782 * math.sin(_degreesToRadians(trueLongitude));
-    final double cosDeclination =
-        math.cos(math.asin(sinDeclination));
-    final double cosHourAngle = (math.cos(_degreesToRadians(90.833)) -
-            (sinDeclination * math.sin(_degreesToRadians(position.latitude)))) /
-        (cosDeclination * math.cos(_degreesToRadians(position.latitude)));
-
-    if (cosHourAngle > 1) {
-      return DateTime(date.year, date.month, date.day, 12);
-    }
-    if (cosHourAngle < -1) {
-      return DateTime(date.year, date.month, date.day);
-    }
-
-    final double hourAngle = sunrise
-        ? (360 - _radiansToDegrees(math.acos(cosHourAngle))) / 15
-        : _radiansToDegrees(math.acos(cosHourAngle)) / 15;
-    final double localMeanTime =
-        hourAngle + rightAscension - (0.06571 * t) - 6.622;
-    final double utcHours = _normalizeHours(localMeanTime - lngHour);
-    final double localHours = _normalizeHours(
-      utcHours + date.timeZoneOffset.inMinutes / 60,
-    );
-
-    final int hour = localHours.floor();
-    final int minute = ((localHours - hour) * 60).round();
-    return DateTime(date.year, date.month, date.day, hour, 0)
-        .add(Duration(minutes: minute));
-  }
-
-  void _scheduleNextDaylightCheck(DateTime boundary) {
-    _daylightTimer?.cancel();
-    final Duration delay = boundary.difference(DateTime.now());
-    _daylightTimer = Timer(
-      delay.isNegative ? const Duration(minutes: 15) : delay + const Duration(seconds: 2),
-      _applyAutomaticMapMode,
-    );
-  }
-
-  Future<void> _applyMapStyle() async {
-    final GoogleMapController? controller = _mapController;
-    if (controller == null) {
-      _logMapDiagnostic('style skipped: controller not ready');
-      return;
-    }
-    if (_useDefaultMapStyleForDiagnostic) {
-      _logMapDiagnostic('style skipped: diagnostic default normal map active');
-      return;
-    }
-
-    try {
-      await controller.setMapStyle(_isNight ? _nightMapStyle : _dayMapStyle);
-      _logMapDiagnostic('style applied: ${_isNight ? 'night' : 'day'}');
-      if (mounted) {
-        setState(() => _mapDiagnosticError = null);
-      }
-    } catch (error, stackTrace) {
-      _logMapDiagnostic('style failed: $error');
-      debugPrintStack(
-        label: '$_diagnosticLogPrefix style stack',
-        stackTrace: stackTrace,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _mapDiagnosticError =
-            'Internal map diagnostic: map styling failed. '
-            'Using default Google map.';
-      });
-    }
-  }
-
-  void _onCameraMove(CameraPosition position) {
-    _lastCameraPosition = position;
-    if (!_mapCameraSettled) {
-      _logMapDiagnostic(
-        'camera moving target=${_formatLatLng(position.target)} '
-        'zoom=${position.zoom.toStringAsFixed(2)}',
-      );
-    }
-  }
-
-  void _onCameraIdle() {
-    if (!_mapCameraSettled) {
-      setState(() => _mapCameraSettled = true);
-    }
-    _logMapDiagnostic(
-      'camera idle target=${_formatLatLng(_lastCameraPosition.target)} '
-      'zoom=${_lastCameraPosition.zoom.toStringAsFixed(2)} '
-      'mapCreated=$_mapCreated markers=${_markers.length}',
-    );
-  }
-
-  void _logMapDiagnostic(String message) {
-    debugPrint('$_diagnosticLogPrefix: $message');
-  }
-
-  String _formatLatLng(LatLng position) {
-    return '${position.latitude.toStringAsFixed(5)},'
-        '${position.longitude.toStringAsFixed(5)}';
-  }
-
-  Future<void> _resolveVisibleEventLocations() async {
+  Future<void> _resolveEventLocations() async {
     final int generation = ++_locationResolutionGeneration;
-    setState(() {
-      _isResolvingLocations = true;
-      _mapMessage = null;
-    });
+    if (mounted) {
+      setState(() => _isResolvingLocations = true);
+    }
 
-    final List<EventModel> events = _homeController.eventData.toList();
     final List<MapEventLocation> resolved =
-        await _locationService.resolveEventLocations(events);
+        await _locationService.resolveEventLocations(
+      _homeController.eventData.toList(),
+    );
 
     if (!mounted || generation != _locationResolutionGeneration) {
       return;
@@ -504,22 +193,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     setState(() {
       _resolvedEvents = resolved;
       _isResolvingLocations = false;
-      _markers = _buildMarkers(_visibleEventLocations());
-      if (events.isNotEmpty && resolved.isEmpty) {
-        _mapMessage =
-            'Events loaded, but none have usable coordinates or geocodable locations yet.';
-      }
     });
-    await _fitMapToVisibleEvents();
   }
 
-  List<MapEventLocation> _visibleEventLocations() {
+  List<EventModel> _visibleEvents() {
     final String filter = _locationService.normalizeZip(_zipFilter);
-    final List<MapEventLocation> events = filter.isEmpty
-        ? _resolvedEvents
-        : _resolvedEvents.where((item) {
+    final List<EventModel> events = filter.isEmpty
+        ? _homeController.eventData.toList()
+        : _homeController.eventData.where((event) {
             final String eventZip =
-                _locationService.normalizeZip(item.event.zipCode);
+                _locationService.normalizeZip(event.zipCode);
             return eventZip == filter ||
                 (eventZip.length >= 3 &&
                     filter.length >= 3 &&
@@ -527,12 +210,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           }).toList();
 
     events.sort((a, b) {
-      final DateTime? aDate =
-          EventDateUtils.parseEventDateTime(a.event.startDate);
-      final DateTime? bDate =
-          EventDateUtils.parseEventDateTime(b.event.startDate);
+      if (_distanceOrigin != null) {
+        final double? aDistance = _distanceMiles(_positionFor(a));
+        final double? bDistance = _distanceMiles(_positionFor(b));
+        if (aDistance != null && bDistance != null) {
+          final int comparison = aDistance.compareTo(bDistance);
+          if (comparison != 0) return comparison;
+        } else if (aDistance != null) {
+          return -1;
+        } else if (bDistance != null) {
+          return 1;
+        }
+      }
+
+      final DateTime? aDate = EventDateUtils.parseEventDateTime(a.startDate);
+      final DateTime? bDate = EventDateUtils.parseEventDateTime(b.startDate);
       if (aDate == null && bDate == null) {
-        return _eventTitle(a.event).compareTo(_eventTitle(b.event));
+        return _eventTitle(a).compareTo(_eventTitle(b));
       }
       if (aDate == null) return 1;
       if (bDate == null) return -1;
@@ -542,46 +236,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     return events;
   }
 
-  Set<Marker> _buildMarkers(List<MapEventLocation> locations) {
-    return locations.map((MapEventLocation item) {
-      final String selectedId = (_selectedEvent?.eventID ?? '').trim();
-      final bool selected = identical(_selectedEvent, item.event) ||
-          (selectedId.isNotEmpty && selectedId == item.event.eventID);
-      return Marker(
-        markerId: MarkerId(_markerIdFor(item.event)),
-        position: item.position,
-        clusterManagerId: _eventClusterId,
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          selected ? BitmapDescriptor.hueRose : BitmapDescriptor.hueViolet,
-        ),
-        infoWindow: InfoWindow.noText,
-        onTap: () => _selectEvent(item),
-      );
-    }).toSet();
-  }
-
-  Future<void> _selectEvent(MapEventLocation item) async {
-    setState(() {
-      _selectedEvent = item.event;
-      _trayState = _EventTrayState.collapsed;
-      _markers = _buildMarkers(_visibleEventLocations());
-    });
-    await _mapController?.animateCamera(
-      CameraUpdate.newLatLng(item.position),
-    );
-  }
-
-  void _clearSelectedEvent() {
-    setState(() {
-      _selectedEvent = null;
-      _markers = _buildMarkers(_visibleEventLocations());
-    });
-  }
-
-  Future<void> _onClusterTap(Cluster cluster) async {
-    await _mapController?.animateCamera(
-      CameraUpdate.newLatLngBounds(cluster.bounds, 72.w),
-    );
+  LatLng? _positionFor(EventModel event) {
+    final String eventId = (event.eventID ?? '').trim();
+    for (final MapEventLocation location in _resolvedEvents) {
+      if (identical(location.event, event)) {
+        return location.position;
+      }
+      if (eventId.isNotEmpty && eventId == location.event.eventID) {
+        return location.position;
+      }
+    }
+    return null;
   }
 
   void _onZipChanged(String value) {
@@ -589,63 +254,58 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final String normalized = _locationService.normalizeZip(value);
     setState(() {
       _zipFilter = normalized;
-      _selectedEvent = null;
-      _mapMessage = null;
-      _markers = _buildMarkers(_visibleEventLocations());
+      _message = normalized.isNotEmpty && normalized.length != 5
+          ? 'Enter a 5-digit US ZIP code.'
+          : null;
+      if (normalized.isEmpty) {
+        _distanceOrigin = null;
+        _originLabel = null;
+      }
     });
 
     if (normalized.length == 5) {
-      _zipDebounce = Timer(const Duration(milliseconds: 450), () {
-        _applyZipSearch(normalized);
-      });
-    } else if (normalized.isNotEmpty) {
-      setState(() {
-        _mapMessage = 'Enter a 5-digit US ZIP code.';
-      });
+      _zipDebounce = Timer(
+        const Duration(milliseconds: 450),
+        () => _applyZipSearch(normalized),
+      );
     }
   }
 
   Future<void> _applyZipSearch(String value) async {
     final String zipCode = _locationService.normalizeZip(value);
-    setState(() {
-      _zipFilter = zipCode;
-      _isZipLoading = true;
-      _selectedEvent = null;
-      _mapMessage = null;
-      _markers = _buildMarkers(_visibleEventLocations());
-    });
-
-    final ZipLookupResult result =
-        await _locationService.resolveZipCode(zipCode);
-
-    if (!mounted) {
+    if (zipCode.length != 5) {
+      setState(() => _message = 'Enter a 5-digit US ZIP code.');
       return;
     }
 
     setState(() {
+      _zipFilter = zipCode;
+      _isZipLoading = true;
+      _message = null;
+    });
+
+    final ZipLookupResult result =
+        await _locationService.resolveZipCode(zipCode);
+    if (!mounted) return;
+
+    setState(() {
       _isZipLoading = false;
+      if (result.position != null) {
+        _distanceOrigin = result.position;
+        _originLabel = zipCode;
+      }
       switch (result.status) {
         case ZipLookupStatus.empty:
-          _mapMessage = null;
+        case ZipLookupStatus.found:
+          _message = null;
           break;
         case ZipLookupStatus.invalid:
         case ZipLookupStatus.notFound:
         case ZipLookupStatus.error:
-          _mapMessage = result.message;
-          break;
-        case ZipLookupStatus.found:
-          _mapMessage = null;
+          _message = result.message;
           break;
       }
     });
-
-    if (result.position != null) {
-      await _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: result.position!, zoom: 12.4),
-        ),
-      );
-    }
   }
 
   Future<void> _clearZipSearch() async {
@@ -653,139 +313,106 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _zipController.clear();
     setState(() {
       _zipFilter = '';
-      _selectedEvent = null;
-      _mapMessage = null;
-      _markers = _buildMarkers(_visibleEventLocations());
+      _distanceOrigin = null;
+      _originLabel = null;
+      _message = null;
     });
-    await _fitMapToVisibleEvents();
   }
 
-  Future<void> _recenterToUser() async {
+  Future<void> _useCurrentLocation() async {
     setState(() {
       _isLocating = true;
-      _locationMessage = null;
+      _message = null;
     });
 
     final AppLocationLookupResult result =
         await AppLocationService.getCurrentLocationIfAllowed();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (!result.hasCoordinates) {
       setState(() {
         _isLocating = false;
-        _userPosition = null;
-        _locationMessage = _locationStatusMessage(result);
+        _message = _locationStatusMessage(result);
       });
       return;
     }
 
+    final Position position = result.position!;
     setState(() {
       _isLocating = false;
-      _userPosition = result.position;
-      _locationMessage = null;
+      _distanceOrigin = LatLng(position.latitude, position.longitude);
+      _originLabel = 'Current location';
+      _zipFilter = '';
+      _zipController.clear();
+      _message = null;
     });
-
-    await _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: LatLng(
-            result.position!.latitude,
-            result.position!.longitude,
-          ),
-          zoom: 13.5,
-        ),
-      ),
-    );
   }
 
-  Future<void> _fitMapToVisibleEvents() async {
-    final GoogleMapController? controller = _mapController;
-    if (controller == null) {
-      return;
-    }
-
-    final List<MapEventLocation> events = _visibleEventLocations();
-    if (events.isEmpty) {
-      await controller.animateCamera(
-        CameraUpdate.newCameraPosition(_defaultCamera),
-      );
-      return;
-    }
-
-    if (events.length == 1) {
-      await controller.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: events.first.position, zoom: 13.2),
-        ),
-      );
-      return;
-    }
-
-    double minLat = events.first.position.latitude;
-    double maxLat = events.first.position.latitude;
-    double minLng = events.first.position.longitude;
-    double maxLng = events.first.position.longitude;
-
-    for (final MapEventLocation event in events) {
-      minLat = math.min(minLat, event.position.latitude);
-      maxLat = math.max(maxLat, event.position.latitude);
-      minLng = math.min(minLng, event.position.longitude);
-      maxLng = math.max(maxLng, event.position.longitude);
-    }
-
-    // Google Maps rejects zero-area bounds when separate events share a venue.
-    const double minimumSpan = 0.002;
-    if ((maxLat - minLat).abs() < minimumSpan) {
-      minLat -= minimumSpan;
-      maxLat += minimumSpan;
-    }
-    if ((maxLng - minLng).abs() < minimumSpan) {
-      minLng -= minimumSpan;
-      maxLng += minimumSpan;
-    }
-
-    await controller.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat, minLng),
-          northeast: LatLng(maxLat, maxLng),
-        ),
-        70.w,
-      ),
+  double? _distanceMiles(LatLng? destination) {
+    final LatLng? origin = _distanceOrigin;
+    if (origin == null || destination == null) return null;
+    final double meters = Geolocator.distanceBetween(
+      origin.latitude,
+      origin.longitude,
+      destination.latitude,
+      destination.longitude,
     );
+    return meters / 1609.344;
   }
 
-  String _markerIdFor(EventModel event) {
-    final String id = (event.eventID ?? '').trim();
-    if (id.isNotEmpty) {
-      return id;
+  String? _distanceLabel(LatLng? destination) {
+    final double? miles = _distanceMiles(destination);
+    if (miles == null) return null;
+    if (miles < 0.1) return '<0.1 mi away';
+    return '${miles.toStringAsFixed(miles < 10 ? 1 : 0)} mi away';
+  }
+
+  Future<void> _openDirections(
+    EventModel event,
+    LatLng? position,
+  ) async {
+    final String destination = position == null
+        ? _eventAddress(event)
+        : '${position.latitude},${position.longitude}';
+    if (destination.isEmpty) return;
+
+    final Uri uri = Uri.https(
+      'www.google.com',
+      '/maps/dir/',
+      <String, String>{'api': '1', 'destination': destination},
+    );
+    final bool opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      setState(() {
+        _message = 'Directions could not be opened on this device.';
+      });
     }
-    return '${event.title ?? 'event'}-${event.startDate ?? ''}-${event.zipCode ?? ''}';
+  }
+
+  String _resultsTitle(int count) {
+    if (_originLabel != null) return 'Events near $_originLabel';
+    return 'Explore events';
+  }
+
+  String _resultsSubtitle(int count) {
+    final String label = '$count event${count == 1 ? '' : 's'}';
+    if (_distanceOrigin != null) return '$label sorted by distance';
+    return '$label available by location';
   }
 
   String _locationStatusMessage(AppLocationLookupResult result) {
     switch (result.status) {
       case 'service_disabled':
-        return 'Location services are disabled. Turn them on to recenter the map.';
+        return 'Location services are disabled. Turn them on to find nearby events.';
       case 'denied':
-        return 'Location permission was denied. Enable it to show your position.';
+        return 'Location permission was denied. Enable it to find nearby events.';
       case 'deniedForever':
         return 'Location permission is permanently denied. Update it in system settings.';
       default:
         return result.message ?? 'Current location is unavailable.';
-    }
-  }
-
-  double _selectedEventBottomInset() {
-    switch (_trayState) {
-      case _EventTrayState.expanded:
-        return 338.h;
-      case _EventTrayState.collapsed:
-        return 82.h;
-      case _EventTrayState.dismissed:
-        return 62.h;
     }
   }
 
@@ -794,155 +421,384 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 }
 
-class _DaylightResult {
-  const _DaylightResult({
-    required this.isDaylight,
-    required this.nextBoundary,
-  });
-
-  final bool isDaylight;
-  final DateTime nextBoundary;
-}
-
-class _MapHeader extends StatelessWidget {
-  const _MapHeader({
-    required this.isNight,
+class _DiscoveryHeader extends StatelessWidget {
+  const _DiscoveryHeader({
     required this.zipController,
     required this.zipFocusNode,
     required this.isZipLoading,
+    required this.isLocating,
+    required this.originLabel,
     required this.onZipChanged,
     required this.onZipSubmitted,
-    required this.onSearchTap,
-    required this.onFilterTap,
     required this.onClearZip,
+    required this.onUseLocation,
   });
 
-  final bool isNight;
   final TextEditingController zipController;
   final FocusNode zipFocusNode;
   final bool isZipLoading;
+  final bool isLocating;
+  final String? originLabel;
   final ValueChanged<String> onZipChanged;
   final ValueChanged<String> onZipSubmitted;
-  final VoidCallback onSearchTap;
-  final VoidCallback onFilterTap;
   final VoidCallback? onClearZip;
+  final VoidCallback onUseLocation;
 
   @override
   Widget build(BuildContext context) {
-    final Color surface =
-        isNight ? AppColors.mapSurface : Colors.white.withOpacity(0.95);
-    final Color textColor = isNight ? AppColors.textColor : const Color(0xFF172033);
-    final Color muted =
-        isNight ? AppColors.textLightColor : const Color(0xFF637083);
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            _RoundIconButton(
-              icon: Icons.search_rounded,
-              isNight: isNight,
-              onTap: onSearchTap,
-            ),
-            const Spacer(),
-            CommonText(
-              text: 'Free2B',
-              color: AppColors.mapAccent,
-              fontSize: 25.sp,
-              fontWeight: FontWeight.w800,
-            ),
-            const Spacer(),
-            _RoundIconButton(
-              icon: Icons.tune_rounded,
-              isNight: isNight,
-              onTap: onFilterTap,
-            ),
-          ],
+    return Container(
+      padding: EdgeInsets.fromLTRB(18.w, 18.h, 18.w, 16.h),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider),
         ),
-        10.h.verticalSpace,
-        Container(
-          padding: EdgeInsets.all(6.w),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(
-              color: isNight
-                  ? Colors.white.withOpacity(0.12)
-                  : const Color(0xFFE1E6EF),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isNight ? 0.28 : 0.10),
-                blurRadius: 18.r,
-                offset: Offset(0, 8.h),
-              ),
-            ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CommonText(
+            text: 'Discover nearby',
+            color: AppColors.textPrimary,
+            fontSize: 27.sp,
+            fontWeight: FontWeight.w700,
           ),
-          child: Row(
+          5.h.verticalSpace,
+          CommonText(
+            text: 'Find Free2B events wherever you want to go.',
+            color: AppColors.textSecondary,
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w400,
+          ),
+          16.h.verticalSpace,
+          Container(
+            height: 50.h,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(15.r),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: TextField(
+              controller: zipController,
+              focusNode: zipFocusNode,
+              keyboardType: TextInputType.number,
+              maxLength: 5,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onChanged: onZipChanged,
+              onSubmitted: onZipSubmitted,
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: 'Search by US ZIP code',
+                hintStyle: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14.sp,
+                ),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: AppColors.textSecondary,
+                  size: 21.sp,
+                ),
+                suffixIcon: isZipLoading
+                    ? Padding(
+                        padding: EdgeInsets.all(14.w),
+                        child: const CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : onClearZip == null
+                        ? null
+                        : IconButton(
+                            onPressed: onClearZip,
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: AppColors.textSecondary,
+                              size: 20.sp,
+                            ),
+                          ),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 15.h),
+              ),
+            ),
+          ),
+          10.h.verticalSpace,
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: isLocating ? null : onUseLocation,
+              icon: isLocating
+                  ? SizedBox(
+                      height: 16.w,
+                      width: 16.w,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(Icons.my_location_rounded, size: 18.sp),
+              label: Text(
+                originLabel == 'Current location'
+                    ? 'Using current location'
+                    : 'Use my current location',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                textStyle: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13.r),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryMessage extends StatelessWidget {
+  const _DiscoveryMessage({required this.message, required this.onClose});
+
+  final String message;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(13.w, 10.h, 8.w, 10.h),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(13.r),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.primary,
+            size: 19.sp,
+          ),
+          9.w.horizontalSpace,
+          Expanded(
+            child: CommonText(
+              text: message,
+              color: AppColors.textPrimary,
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w500,
+              maxLine: 3,
+              softWrap: true,
+            ),
+          ),
+          IconButton(
+            onPressed: onClose,
+            icon: Icon(
+              Icons.close_rounded,
+              color: AppColors.textSecondary,
+              size: 19.sp,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryEventCard extends StatelessWidget {
+  const _DiscoveryEventCard({
+    required this.event,
+    required this.distance,
+    required this.canOpenDirections,
+    required this.onTap,
+    required this.onDirections,
+  });
+
+  final EventModel event;
+  final String? distance;
+  final bool canOpenDirections;
+  final VoidCallback onTap;
+  final VoidCallback onDirections;
+
+  @override
+  Widget build(BuildContext context) {
+    final String venue = (event.venue ?? '').trim();
+    final String address = _eventAddress(event);
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(18.r),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(18.r),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 38.h,
-                  child: TextField(
-                    controller: zipController,
-                    focusNode: zipFocusNode,
-                    keyboardType: TextInputType.number,
-                    maxLength: 5,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
-                    onChanged: onZipChanged,
-                    onSubmitted: onZipSubmitted,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    decoration: InputDecoration(
-                      counterText: '',
-                      hintText: 'US ZIP',
-                      hintStyle: TextStyle(
-                        color: muted,
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.location_on_outlined,
-                        color: muted,
-                        size: 17.sp,
-                      ),
-                      suffixIcon: isZipLoading
-                          ? Padding(
-                              padding: EdgeInsets.all(11.w),
-                              child: CircularProgressIndicator(
-                                color: AppColors.mapAccent,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : onClearZip == null
-                              ? null
-                              : GestureDetector(
-                                  onTap: onClearZip,
-                                  child: Icon(
-                                    Icons.close_rounded,
-                                    color: muted,
-                                    size: 17.sp,
-                                  ),
-                                ),
-                      filled: true,
-                      fillColor: isNight
-                          ? Colors.black.withOpacity(0.30)
-                          : const Color(0xFFF3F6FA),
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                        borderSide: BorderSide.none,
-                      ),
+              Stack(
+                children: [
+                  EventImage(
+                    imageUrl: event.image,
+                    height: 148.h,
+                    width: double.infinity,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(17.r),
                     ),
                   ),
+                  if (distance != null)
+                    Positioned(
+                      top: 12.h,
+                      right: 12.w,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 10.w,
+                          vertical: 6.h,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.mapSurface,
+                          borderRadius: BorderRadius.circular(99.r),
+                          border: Border.all(color: AppColors.mapBorder),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.near_me_rounded,
+                              color: AppColors.mapLocation,
+                              size: 14.sp,
+                            ),
+                            5.w.horizontalSpace,
+                            CommonText(
+                              text: distance!,
+                              color: AppColors.textPrimary,
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(14.w, 13.h, 14.w, 14.h),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CommonText(
+                      text: _eventTitle(event),
+                      color: AppColors.textPrimary,
+                      fontSize: 17.sp,
+                      fontWeight: FontWeight.w700,
+                      maxLine: 2,
+                      softWrap: true,
+                    ),
+                    8.h.verticalSpace,
+                    _MetadataRow(
+                      icon: Icons.calendar_today_rounded,
+                      text: _eventTime(event),
+                      color: AppColors.primary,
+                    ),
+                    if (venue.isNotEmpty) ...[
+                      7.h.verticalSpace,
+                      _MetadataRow(
+                        icon: Icons.storefront_rounded,
+                        text: venue,
+                      ),
+                    ],
+                    if (address.isNotEmpty) ...[
+                      7.h.verticalSpace,
+                      _MetadataRow(
+                        icon: Icons.location_on_outlined,
+                        text: address,
+                      ),
+                    ],
+                    13.h.verticalSpace,
+                    Row(
+                      children: [
+                        if (canOpenDirections)
+                          TextButton.icon(
+                            onPressed: onDirections,
+                            icon: Icon(
+                              Icons.directions_rounded,
+                              size: 17.sp,
+                            ),
+                            label: const Text('Directions'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.mapLocation,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 10.w,
+                                vertical: 7.h,
+                              ),
+                              textStyle: TextStyle(
+                                fontSize: 12.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        const Spacer(),
+                        CommonText(
+                          text: 'View event',
+                          color: AppColors.textSecondary,
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        3.w.horizontalSpace,
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textSecondary,
+                          size: 21.sp,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetadataRow extends StatelessWidget {
+  const _MetadataRow({
+    required this.icon,
+    required this.text,
+    this.color = AppColors.textSecondary,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 16.sp),
+        8.w.horizontalSpace,
+        Expanded(
+          child: CommonText(
+            text: text,
+            color: color,
+            fontSize: 12.sp,
+            fontWeight: FontWeight.w500,
+            maxLine: 2,
+            softWrap: true,
           ),
         ),
       ],
@@ -950,659 +806,65 @@ class _MapHeader extends StatelessWidget {
   }
 }
 
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.isNight,
-    this.onTap,
+class _EmptyDiscoveryState extends StatelessWidget {
+  const _EmptyDiscoveryState({
+    required this.hasFilter,
+    required this.onClearFilter,
   });
 
-  final IconData icon;
-  final bool isNight;
-  final VoidCallback? onTap;
+  final bool hasFilter;
+  final VoidCallback? onClearFilter;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 40.w,
-        width: 40.w,
-        decoration: BoxDecoration(
-          color: isNight ? Colors.black.withOpacity(0.42) : Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isNight ? Colors.white.withOpacity(0.10) : const Color(0xFFE1E6EF),
-          ),
-        ),
-        child: Icon(
-          icon,
-          color: isNight ? AppColors.textColor : const Color(0xFF172033),
-          size: 23.sp,
-        ),
-      ),
-    );
-  }
-}
-
-class _MapFloatingButton extends StatelessWidget {
-  const _MapFloatingButton({
-    required this.icon,
-    required this.tooltip,
-    required this.isNight,
-    required this.onTap,
-    this.isLoading = false,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final bool isNight;
-  final bool isLoading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        child: Container(
-          height: 44.w,
-          width: 44.w,
-          decoration: BoxDecoration(
-            color: isNight ? AppColors.mapSurface : Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isNight
-                  ? Colors.white.withOpacity(0.14)
-                  : const Color(0xFFE1E6EF),
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(28.w),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: 64.w,
+              width: 64.w,
+              decoration: const BoxDecoration(
+                color: AppColors.surfaceElevated,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.explore_outlined,
+                color: AppColors.primary,
+                size: 30.sp,
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isNight ? 0.36 : 0.12),
-                blurRadius: 18.r,
-                offset: Offset(0, 8.h),
+            16.h.verticalSpace,
+            CommonText(
+              text: hasFilter
+                  ? 'No events found near this ZIP code'
+                  : 'No events are available yet',
+              color: AppColors.textPrimary,
+              fontSize: 17.sp,
+              fontWeight: FontWeight.w700,
+              textAlign: TextAlign.center,
+            ),
+            7.h.verticalSpace,
+            CommonText(
+              text: hasFilter
+                  ? 'Try another ZIP code or browse all events.'
+                  : 'Check back soon for events in your area.',
+              color: AppColors.textSecondary,
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w400,
+              textAlign: TextAlign.center,
+            ),
+            if (onClearFilter != null) ...[
+              16.h.verticalSpace,
+              TextButton(
+                onPressed: onClearFilter,
+                child: const Text('Browse all events'),
               ),
             ],
-          ),
-          child: isLoading
-              ? Padding(
-                  padding: EdgeInsets.all(12.w),
-                  child: CircularProgressIndicator(
-                    color: AppColors.mapLocation,
-                    strokeWidth: 2,
-                  ),
-                )
-              : Icon(
-                  icon,
-                  color: isNight ? AppColors.textColor : const Color(0xFF172033),
-                  size: 22.sp,
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MapStatusPill extends StatelessWidget {
-  const _MapStatusPill({
-    required this.text,
-    required this.isNight,
-    this.showSpinner = false,
-  });
-
-  final String text;
-  final bool isNight;
-  final bool showSpinner;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
-      decoration: BoxDecoration(
-        color: isNight ? AppColors.mapSurface : Colors.white,
-        borderRadius: BorderRadius.circular(24.r),
-        border: Border.all(color: Colors.white.withOpacity(isNight ? 0.12 : 0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showSpinner) ...[
-            SizedBox(
-              height: 14.w,
-              width: 14.w,
-              child: CircularProgressIndicator(
-                color: AppColors.mapAccent,
-                strokeWidth: 2,
-              ),
-            ),
-            8.w.horizontalSpace,
-          ],
-          CommonText(
-            text: text,
-            color: isNight ? AppColors.textColor : const Color(0xFF172033),
-            fontSize: 12.sp,
-            fontWeight: FontWeight.w800,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MapMessageCard extends StatelessWidget {
-  const _MapMessageCard({
-    required this.message,
-    required this.isNight,
-    required this.onClose,
-  });
-
-  final String message;
-  final bool isNight;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(12.w, 10.h, 8.w, 10.h),
-      decoration: BoxDecoration(
-        color: isNight ? AppColors.mapSurface : Colors.white,
-        borderRadius: BorderRadius.circular(14.r),
-        border: Border.all(
-          color: isNight ? Colors.white.withOpacity(0.14) : const Color(0xFFE1E6EF),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: CommonText(
-              text: message,
-              color: isNight ? AppColors.textColor : const Color(0xFF172033),
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w700,
-              maxLine: 3,
-              softWrap: true,
-            ),
-          ),
-          GestureDetector(
-            onTap: onClose,
-            child: Icon(
-              Icons.close_rounded,
-              color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
-              size: 20.sp,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SelectedEventCard extends StatelessWidget {
-  const _SelectedEventCard({
-    required this.event,
-    required this.isNight,
-    required this.onTap,
-    required this.onClose,
-  });
-
-  final EventModel event;
-  final bool isNight;
-  final VoidCallback onTap;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final String location = _eventLocation(event);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(10.w),
-        decoration: BoxDecoration(
-          color: isNight ? AppColors.mapSurface : Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(
-            color: AppColors.mapAccent.withOpacity(isNight ? 0.72 : 0.34),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.mapAccent.withOpacity(isNight ? 0.26 : 0.12),
-              blurRadius: 22.r,
-              offset: Offset(0, 10.h),
-            ),
           ],
         ),
-        child: Row(
-          children: [
-            EventImage(
-              imageUrl: event.image,
-              height: 72.w,
-              width: 72.w,
-              borderRadius: BorderRadius.circular(12.r),
-            ),
-            11.w.horizontalSpace,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CommonText(
-                    text: _eventTitle(event),
-                    color: isNight ? AppColors.textColor : const Color(0xFF172033),
-                    fontSize: 15.sp,
-                    fontWeight: FontWeight.w800,
-                    maxLine: 2,
-                    softWrap: true,
-                  ),
-                  6.h.verticalSpace,
-                  CommonText(
-                    text: _eventTime(event),
-                    color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w700,
-                    maxLine: 1,
-                    softWrap: false,
-                  ),
-                  if (location.isNotEmpty) ...[
-                    5.h.verticalSpace,
-                    CommonText(
-                      text: location,
-                      color: AppColors.mapLocation,
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w800,
-                      maxLine: 1,
-                      softWrap: false,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            8.w.horizontalSpace,
-            GestureDetector(
-              onTap: onClose,
-              child: Icon(
-                Icons.close_rounded,
-                color: isNight ? AppColors.textLightColor : const Color(0xFF637083),
-                size: 22.sp,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EventTray extends StatefulWidget {
-  const _EventTray({
-    required this.events,
-    required this.zipFilter,
-    required this.state,
-    required this.onStateChanged,
-    required this.onTapEvent,
-  });
-
-  final List<EventModel> events;
-  final String zipFilter;
-  final _EventTrayState state;
-  final ValueChanged<_EventTrayState> onStateChanged;
-  final ValueChanged<EventModel> onTapEvent;
-
-  @override
-  State<_EventTray> createState() => _EventTrayStatefulState();
-}
-
-class _EventTrayStatefulState extends State<_EventTray> {
-  final DraggableScrollableController _controller =
-      DraggableScrollableController();
-
-  static const double _collapsedSize = 0.105;
-  static const double _expandedSize = 0.52;
-  static const double _dismissThreshold = 0.07;
-
-  @override
-  void didUpdateWidget(covariant _EventTray oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state &&
-        widget.state != _EventTrayState.dismissed &&
-        _controller.isAttached) {
-      _controller.animateTo(
-        widget.state == _EventTrayState.expanded
-            ? _expandedSize
-            : _collapsedSize,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.state == _EventTrayState.dismissed) {
-      return SafeArea(
-        top: false,
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => widget.onStateChanged(_EventTrayState.collapsed),
-            onVerticalDragEnd: (details) {
-              if ((details.primaryVelocity ?? 0) < -80) {
-                widget.onStateChanged(_EventTrayState.collapsed);
-              }
-            },
-            child: Container(
-              margin: EdgeInsets.only(bottom: 8.h),
-              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
-              decoration: BoxDecoration(
-                color: AppColors.mapSurface,
-                borderRadius: BorderRadius.circular(99.r),
-                border: Border.all(color: Colors.white.withOpacity(0.16)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.28),
-                    blurRadius: 16.r,
-                    offset: Offset(0, 8.h),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 30.w,
-                    height: 4.h,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.26),
-                      borderRadius: BorderRadius.circular(99.r),
-                    ),
-                  ),
-                  10.w.horizontalSpace,
-                  CommonText(
-                    text:
-                        '${widget.events.length} event${widget.events.length == 1 ? '' : 's'}',
-                    color: AppColors.textColor,
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  4.w.horizontalSpace,
-                  Icon(
-                    Icons.keyboard_arrow_up_rounded,
-                    color: AppColors.textLightColor,
-                    size: 18.sp,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    final bool isExpanded = widget.state == _EventTrayState.expanded;
-
-    return NotificationListener<DraggableScrollableNotification>(
-      onNotification: (notification) {
-        if (notification.extent <= _dismissThreshold) {
-          widget.onStateChanged(_EventTrayState.dismissed);
-        } else if (notification.extent > 0.32 &&
-            widget.state != _EventTrayState.expanded) {
-          widget.onStateChanged(_EventTrayState.expanded);
-        } else if (notification.extent <= 0.20 &&
-            widget.state != _EventTrayState.collapsed) {
-          widget.onStateChanged(_EventTrayState.collapsed);
-        }
-        return false;
-      },
-      child: DraggableScrollableSheet(
-        controller: _controller,
-        initialChildSize: isExpanded ? _expandedSize : _collapsedSize,
-        minChildSize: 0.055,
-        maxChildSize: _expandedSize,
-        snap: true,
-        snapSizes: const <double>[_collapsedSize, _expandedSize],
-        builder: (context, scrollController) {
-          return SafeArea(
-            top: false,
-            child: Container(
-              margin: EdgeInsets.fromLTRB(14.w, 0, 14.w, 8.h),
-              decoration: BoxDecoration(
-                color: AppColors.mapSurface,
-                borderRadius: BorderRadius.circular(18.r),
-                border: Border.all(color: AppColors.mapBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.42),
-                    blurRadius: 24.r,
-                    offset: Offset(0, 10.h),
-                  ),
-                ],
-              ),
-              child: CustomScrollView(
-                controller: scrollController,
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        widget.onStateChanged(
-                          isExpanded
-                              ? _EventTrayState.collapsed
-                              : _EventTrayState.expanded,
-                        );
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(13.w, 10.h, 13.w, 10.h),
-                        child: Column(
-                          children: [
-                            Center(
-                              child: Container(
-                                height: 4.h,
-                                width: 42.w,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.20),
-                                  borderRadius: BorderRadius.circular(99.r),
-                                ),
-                              ),
-                            ),
-                            8.h.verticalSpace,
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      CommonText(
-                                        text: widget.zipFilter.isEmpty
-                                            ? 'Map events'
-                                            : 'Events near ${widget.zipFilter}',
-                                        color: AppColors.textColor,
-                                        fontSize: 16.sp,
-                                        fontWeight: FontWeight.w800,
-                                        maxLine: 1,
-                                        softWrap: false,
-                                      ),
-                                      2.h.verticalSpace,
-                                      CommonText(
-                                        text:
-                                            '${widget.events.length} event${widget.events.length == 1 ? '' : 's'} represented',
-                                        color: AppColors.textLightColor,
-                                        fontSize: 12.sp,
-                                        fontWeight: FontWeight.w600,
-                                        maxLine: 1,
-                                        softWrap: false,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  isExpanded
-                                      ? Icons.keyboard_arrow_down_rounded
-                                      : Icons.keyboard_arrow_up_rounded,
-                                  color: AppColors.textLightColor,
-                                  size: 24.sp,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (widget.events.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(18.w),
-                          child: CommonText(
-                            text: 'Try another ZIP code or clear the search.',
-                            color: AppColors.textLightColor,
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w700,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(13.w, 0, 13.w, 13.h),
-                      sliver: SliverList.separated(
-                        itemCount: widget.events.length,
-                        separatorBuilder: (_, __) => 10.h.verticalSpace,
-                        itemBuilder: (context, index) {
-                          final EventModel event = widget.events[index];
-                          return _TrayEventCard(
-                            event: event,
-                            onTap: () => widget.onTapEvent(event),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TrayEventCard extends StatelessWidget {
-  const _TrayEventCard({
-    required this.event,
-    required this.onTap,
-  });
-
-  final EventModel event;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final String location = _eventLocation(event);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(8.w),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12.r),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Row(
-          children: [
-            EventImage(
-              imageUrl: event.image,
-              height: 52.w,
-              width: 52.w,
-              borderRadius: BorderRadius.circular(9.r),
-            ),
-            10.w.horizontalSpace,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CommonText(
-                    text: _eventTitle(event),
-                    color: AppColors.textColor,
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w800,
-                    maxLine: 2,
-                    softWrap: true,
-                  ),
-                  5.h.verticalSpace,
-                  CommonText(
-                    text: _eventTime(event),
-                    color: AppColors.textLightColor,
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w700,
-                    maxLine: 1,
-                    softWrap: false,
-                  ),
-                  if (location.isNotEmpty) ...[
-                    4.h.verticalSpace,
-                    CommonText(
-                      text: location,
-                      color: AppColors.mapLocation,
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w800,
-                      maxLine: 1,
-                      softWrap: false,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.textLightColor,
-              size: 22.sp,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyMapState extends StatelessWidget {
-  const _EmptyMapState({required this.isNight, required this.zipFilter});
-
-  final bool isNight;
-  final String zipFilter;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 250.w,
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: isNight ? AppColors.mapSurface : Colors.white.withOpacity(0.96),
-        borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(
-          color: isNight ? Colors.white.withOpacity(0.12) : const Color(0xFFE1E6EF),
-        ),
-      ),
-      child: CommonText(
-        text: zipFilter.isEmpty
-            ? 'No mapped events are available yet.'
-            : 'No mapped events matched that ZIP code.',
-        color: isNight ? AppColors.textColor : const Color(0xFF172033),
-        fontSize: 13.sp,
-        fontWeight: FontWeight.w700,
-        textAlign: TextAlign.center,
       ),
     );
   }
@@ -1615,15 +877,14 @@ String _eventTitle(EventModel event) {
 
 String _eventTime(EventModel event) {
   final DateTime? parsed = EventDateUtils.parseEventDateTime(event.startDate);
-  if (parsed == null) {
-    return 'Time coming soon';
-  }
-  return DateFormat('EEE, MMM d - h:mm a').format(parsed);
+  if (parsed == null) return 'Date and time coming soon';
+  return DateFormat('EEE, MMM d • h:mm a').format(parsed);
 }
 
-String _eventLocation(EventModel event) {
+String _eventAddress(EventModel event) {
   final List<String> parts = <String?>[
     event.address,
+    event.aptSuiteOther,
     event.city,
     event.state,
     event.zipCode,
@@ -1634,133 +895,3 @@ String _eventLocation(EventModel event) {
       .toList();
   return parts.join(', ');
 }
-
-double _degreesToRadians(double degrees) => degrees * math.pi / 180;
-
-double _radiansToDegrees(double radians) => radians * 180 / math.pi;
-
-double _normalizeDegrees(double degrees) {
-  double normalized = degrees % 360;
-  if (normalized < 0) {
-    normalized += 360;
-  }
-  return normalized;
-}
-
-double _normalizeHours(double hours) {
-  double normalized = hours % 24;
-  if (normalized < 0) {
-    normalized += 24;
-  }
-  return normalized;
-}
-
-const String _dayMapStyle = '''
-[
-  {
-    "featureType": "poi.business",
-    "stylers": [{ "visibility": "off" }]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.icon",
-    "stylers": [{ "visibility": "off" }]
-  },
-  {
-    "featureType": "water",
-    "stylers": [{ "color": "#bfe7ff" }]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#ffffff" }]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#e7edf5" }]
-  }
-]
-''';
-
-const String _nightMapStyle = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [{ "color": "#070a13" }]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{ "color": "#d8d9ff" }]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [{ "color": "#080914" }]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [{ "color": "#ff8df7" }]
-  },
-  {
-    "featureType": "landscape",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#080b15" }]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.icon",
-    "stylers": [{ "visibility": "off" }]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#071a18" }]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#303342" }]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.stroke",
-    "stylers": [{ "color": "#141626" }]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [{ "color": "#aeb3c7" }]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#4b315e" }]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#5b23e5" }]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry.stroke",
-    "stylers": [{ "color": "#ff58f3" }]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#1f2540" }]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{ "color": "#06345d" }]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [{ "color": "#2d9bff" }]
-  }
-]
-''';

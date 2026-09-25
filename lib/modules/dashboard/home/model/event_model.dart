@@ -17,6 +17,7 @@ class EventModel {
   final String? image;
   final String? state;
   final String? title;
+  final String? venue;
   final String? aptSuiteOther;
   final String? startDate;
   final String? endDate;
@@ -38,6 +39,7 @@ class EventModel {
     this.description,
     this.state,
     this.title,
+    this.venue,
     this.aptSuiteOther,
     this.startDate,
     this.endDate,
@@ -60,6 +62,7 @@ class EventModel {
         description: description,
         state: state,
         title: title,
+        venue: venue,
         createdAt: createdAt,
         aptSuiteOther: aptSuiteOther,
         startDate: startDate,
@@ -74,7 +77,8 @@ class EventModel {
       );
 
   @override
-  EventModel copyWith({String? country,
+  EventModel copyWith({
+    String? country,
     String? uid,
     String? address,
     String? city,
@@ -84,6 +88,7 @@ class EventModel {
     String? state,
     int? createdAt,
     String? title,
+    String? venue,
     String? aptSuiteOther,
     String? startDate,
     String? endDate,
@@ -93,7 +98,8 @@ class EventModel {
     String? categoryType,
     String? zipCode,
     double? latitude,
-    double? longitude}) =>
+    double? longitude,
+  }) =>
       EventModel(
         country: country ?? this.country,
         uid: uid ?? this.uid,
@@ -104,6 +110,7 @@ class EventModel {
         state: state ?? this.state,
         createdAt: createdAt ?? this.createdAt,
         title: title ?? this.title,
+        venue: venue ?? this.venue,
         aptSuiteOther: aptSuiteOther ?? this.aptSuiteOther,
         startDate: startDate ?? this.startDate,
         endDate: endDate ?? this.endDate,
@@ -128,6 +135,7 @@ class EventModel {
             : List<String>.from(json["description"]!.map((x) => x)),
         state: json["state"],
         title: json["title"],
+        venue: json["venue"] ?? json["venueName"] ?? json["locationName"],
         createdAt: json["createdAt"],
         aptSuiteOther: json["Apt/Suite/Other"],
         startDate: json["startDate"],
@@ -138,7 +146,8 @@ class EventModel {
         category: json["category"] == null
             ? []
             : List<Category>.from(
-            json["category"].map((x) => Category.fromJson(x))),
+                json["category"].map((x) => Category.fromJson(x)),
+              ),
 
         zipCode: json["zipCode"],
         categoryType: json["categoryType"],
@@ -158,6 +167,7 @@ class EventModel {
             : List<dynamic>.from(description!.map((x) => x)),
         "state": state ?? '',
         "title": title ?? '',
+        "venue": venue ?? '',
         "createdAt": createdAt ?? '',
         "Apt/Suite/Other": aptSuiteOther ?? '',
         "startDate": startDate ?? '',

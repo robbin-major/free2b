@@ -27,6 +27,18 @@ void main() {
       expect(event.latitude, 41.89);
       expect(event.longitude, -87.62);
     });
+
+    test('preserves event identity and venue metadata', () {
+      final EventModel event = EventModel.fromJson(<String, dynamic>{
+        'eventId': 'event-42',
+        'venueName': 'Free2B Arts Center',
+      });
+
+      expect(event.eventID, 'event-42');
+      expect(event.venue, 'Free2B Arts Center');
+      expect(event.toJson()['eventID'], 'event-42');
+      expect(event.toJson()['venue'], 'Free2B Arts Center');
+    });
   });
 
   group('MapEventLocationService ZIP normalization', () {
