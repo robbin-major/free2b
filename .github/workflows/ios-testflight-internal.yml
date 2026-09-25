@@ -24,6 +24,7 @@ jobs:
     env:
       BUNDLE_ID: com.free2bapp.mobile
       APPLE_TEAM_ID: Y89WLT6JJ7
+      IOS_BUILD_NAME: 1.0.26
       IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
       IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
       IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
@@ -81,6 +82,64 @@ jobs:
 
       - name: Install FlutterFire CLI
         run: dart pub global activate flutterfire_cli
+
+      - name: Select next unused TestFlight build number
+        run: |
+          PRIVATE_KEY_PATH="$RUNNER_TEMP/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
+          printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$PRIVATE_KEY_PATH"
+          export PRIVATE_KEY_PATH
+
+          JWT="$(ruby <<'RUBY'
+          require 'base64'
+          require 'json'
+          require 'openssl'
+
+          def base64url(value)
+            Base64.urlsafe_encode64(value, padding: false)
+          end
+
+          header = { alg: 'ES256', kid: ENV.fetch('APP_STORE_CONNECT_KEY_ID'), typ: 'JWT' }
+          now = Time.now.to_i
+          payload = {
+            iss: ENV.fetch('APP_STORE_CONNECT_ISSUER_ID'),
+            iat: now,
+            exp: now + 600,
+            aud: 'appstoreconnect-v1'
+          }
+          encoded = [base64url(header.to_json), base64url(payload.to_json)].join('.')
+          key = OpenSSL::PKey.read(File.read(ENV.fetch('PRIVATE_KEY_PATH')))
+          der_signature = key.dsa_sign_asn1(OpenSSL::Digest::SHA256.digest(encoded))
+          sequence = OpenSSL::ASN1.decode(der_signature)
+          raw_signature = sequence.value.map { |integer| integer.value.to_s(2).rjust(32, "\0") }.join
+          puts "#{encoded}.#{base64url(raw_signature)}"
+          RUBY
+          )"
+
+          APPS_RESPONSE="$(curl --fail-with-body --silent --show-error --get \
+            -H "Authorization: Bearer $JWT" \
+            --data-urlencode "filter[bundleId]=$BUNDLE_ID" \
+            --data-urlencode 'limit=1' \
+            https://api.appstoreconnect.apple.com/v1/apps)"
+          APP_ID="$(printf '%s' "$APPS_RESPONSE" | python3 -c 'import json,sys; data=json.load(sys.stdin).get("data", []); print(data[0]["id"] if data else "")')"
+          if [ -z "$APP_ID" ]; then
+            echo "App Store Connect returned no app for $BUNDLE_ID."
+            exit 1
+          fi
+
+          BUILDS_RESPONSE="$(curl --fail-with-body --silent --show-error --get \
+            -H "Authorization: Bearer $JWT" \
+            --data-urlencode "filter[app]=$APP_ID" \
+            --data-urlencode "filter[preReleaseVersion.version]=$IOS_BUILD_NAME" \
+            --data-urlencode 'limit=200' \
+            https://api.appstoreconnect.apple.com/v1/builds)"
+          LATEST_BUILD="$(printf '%s' "$BUILDS_RESPONSE" | python3 -c 'import json,sys; versions=[int(item["attributes"]["version"]) for item in json.load(sys.stdin).get("data", []) if item.get("attributes", {}).get("version", "").isdigit()]; print(max(versions, default=44))')"
+          IOS_BUILD_NUMBER="$((LATEST_BUILD + 1))"
+          if [ "$IOS_BUILD_NUMBER" -lt 45 ]; then
+            IOS_BUILD_NUMBER=45
+          fi
+          echo "Latest uploaded $IOS_BUILD_NAME build: $LATEST_BUILD"
+          echo "Selected iOS build number: $IOS_BUILD_NUMBER"
+          echo "IOS_BUILD_NUMBER=$IOS_BUILD_NUMBER" >> "$GITHUB_ENV"
 
       - name: Install Apple signing certificate and profile
         run: |
@@ -175,6 +234,7 @@ jobs:
           python3 - <<'PY'
           import os
           import pathlib
+          import re
 
           project_path = pathlib.Path("ios/Runner.xcodeproj/project.pbxproj")
           project = project_path.read_text()
@@ -190,11 +250,54 @@ jobs:
               f"\t\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"{os.environ['IOS_PROFILE_NAME']}\";"
           )
           project = project.replace(development_team, signing_settings)
+          replacements = {
+              "CURRENT_PROJECT_VERSION": os.environ["IOS_BUILD_NUMBER"],
+              "FLUTTER_BUILD_NAME": os.environ["IOS_BUILD_NAME"],
+              "FLUTTER_BUILD_NUMBER": os.environ["IOS_BUILD_NUMBER"],
+              "MARKETING_VERSION": os.environ["IOS_BUILD_NAME"],
+          }
+          for setting, value in replacements.items():
+              project = re.sub(
+                  rf"({setting} = )[^;]+;",
+                  rf"\g<1>{value};",
+                  project,
+              )
           project_path.write_text(project)
           PY
 
       - name: Build signed IPA
-        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+        run: |
+          flutter build ipa \
+            --release \
+            --build-name="$IOS_BUILD_NAME" \
+            --build-number="$IOS_BUILD_NUMBER" \
+            --export-options-plist=ios/ExportOptions.plist
+
+      - name: Verify IPA version metadata
+        run: |
+          IPA_PATH="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found to verify."
+            exit 1
+          fi
+          VERIFY_DIR="$RUNNER_TEMP/verify-ipa"
+          rm -rf "$VERIFY_DIR"
+          mkdir -p "$VERIFY_DIR"
+          unzip -q "$IPA_PATH" -d "$VERIFY_DIR"
+          APP_PATH="$(find "$VERIFY_DIR/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          INFO_PLIST="$APP_PATH/Info.plist"
+          ARCHIVE_BUILD_NAME="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$INFO_PLIST")"
+          ARCHIVE_BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$INFO_PLIST")"
+          echo "IPA CFBundleShortVersionString: $ARCHIVE_BUILD_NAME"
+          echo "IPA CFBundleVersion: $ARCHIVE_BUILD_NUMBER"
+          if [ "$ARCHIVE_BUILD_NAME" != "$IOS_BUILD_NAME" ]; then
+            echo "IPA marketing version does not match $IOS_BUILD_NAME."
+            exit 1
+          fi
+          if [ "$ARCHIVE_BUILD_NUMBER" != "$IOS_BUILD_NUMBER" ] || [ "$ARCHIVE_BUILD_NUMBER" -le 44 ]; then
+            echo "IPA build number must match $IOS_BUILD_NUMBER and be greater than 44."
+            exit 1
+          fi
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
