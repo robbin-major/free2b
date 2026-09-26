@@ -7,9 +7,9 @@ import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:geocoding/geocoding.dart';
 
 import '../../../../utils/app_colors.dart';
 
@@ -75,31 +75,22 @@ class DetailController extends GetxController {
     }
   }
 
-  Future<void> getLatLngFromAddress(String address) async {
-    RxString locationMessage = "".obs;
-    try {
-      List<Location> locations = await locationFromAddress(address);
-      if (locations.isNotEmpty) {
-        final location = locations.first;
-        locationMessage.value = "Latitude: ${location.latitude}, Longitude: ${location.longitude}";
-        print("locationMessage ${locationMessage.value}");
-        if (locationMessage.isNotEmpty) openMap(location.latitude, location.longitude);
-      } else {
-        locationMessage.value = "No location found for the given address.";
-      }
-    } catch (e) {
-      locationMessage.value = "Error occurred: $e";
-    }
-  }
+  Future<void> openEventMap(EventModel event) async {
+    final String destination = eventMapDestination(
+      event,
+      fallbackLatitude: event.latitude,
+      fallbackLongitude: event.longitude,
+    );
+    if (destination.isEmpty) return;
 
-  Future<void> openMap(double latitude, double longitude) async {
-    String googleUrl = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
-    if (googleUrl.isNotEmpty) {
-      print(googleUrl);
-      await launchUrl(Uri.parse(googleUrl));
-    } else {
-      throw 'Could not open the map.';
-    }
+    await launchUrl(
+      googleMapsSearchUri(
+        event,
+        fallbackLatitude: event.latitude,
+        fallbackLongitude: event.longitude,
+      ),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   final RegExp _linkRegExp = RegExp(

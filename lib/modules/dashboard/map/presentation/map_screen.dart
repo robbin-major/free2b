@@ -8,6 +8,7 @@ import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/modules/dashboard/map/data/map_event_location_service.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:flutter_template/utils/location_service.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
@@ -371,15 +372,17 @@ class _MapScreenState extends State<MapScreen> {
     EventModel event,
     LatLng? position,
   ) async {
-    final String destination = position == null
-        ? _eventAddress(event)
-        : '${position.latitude},${position.longitude}';
+    final String destination = eventMapDestination(
+      event,
+      fallbackLatitude: position?.latitude,
+      fallbackLongitude: position?.longitude,
+    );
     if (destination.isEmpty) return;
 
-    final Uri uri = Uri.https(
-      'www.google.com',
-      '/maps/dir/',
-      <String, String>{'api': '1', 'destination': destination},
+    final Uri uri = googleMapsDirectionsUri(
+      event,
+      fallbackLatitude: position?.latitude,
+      fallbackLongitude: position?.longitude,
     );
     final bool opened = await launchUrl(
       uri,

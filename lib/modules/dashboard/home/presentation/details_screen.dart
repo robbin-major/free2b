@@ -1066,12 +1066,7 @@ class DetailsScreen extends StatelessWidget {
   }
 
   void _openMapLocation() {
-    _detailController.getLatLngFromAddress(
-      "${_detailController.eventModel.address} "
-      "${_detailController.eventModel.city} "
-      "${_detailController.eventModel.state} "
-      "${_detailController.eventModel.country}",
-    );
+    _detailController.openEventMap(_detailController.eventModel);
   }
 
   Future<void> _shareEvent() async {
