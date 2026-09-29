@@ -1,4 +1,7 @@
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
+import 'package:flutter/foundation.dart';
+
+const bool _performanceInstrumentationEnabled = kDebugMode || kProfileMode;
 
 abstract final class Free2bInterest {
   static const String music = 'Music';
@@ -39,6 +42,21 @@ class InterestMatchReason {
 }
 
 abstract final class EventInterestClassifier {
+  static int _classificationInvocationCount = 0;
+  static int _classificationElapsedMicroseconds = 0;
+
+  static int get classificationInvocationCount =>
+      _classificationInvocationCount;
+
+  static Duration get classificationElapsed => Duration(
+        microseconds: _classificationElapsedMicroseconds,
+      );
+
+  static void resetPerformanceMetrics() {
+    _classificationInvocationCount = 0;
+    _classificationElapsedMicroseconds = 0;
+  }
+
   static const Map<String, String> _adminCategoryMap = <String, String>{
     'live music': Free2bInterest.music,
     'concerts': Free2bInterest.music,
@@ -121,8 +139,29 @@ abstract final class EventInterestClassifier {
     Free2bInterest.historyCulture: <String>['historical lecture', 'history lecture', 'cultural heritage', 'heritage celebration'],
   };
 
-  static Set<String> classify(EventModel event) =>
-      Set<String>.from(Free2bInterest.values.where(explain(event).containsKey));
+  static Set<String> classify(EventModel event) {
+    final Stopwatch? stopwatch =
+        _performanceInstrumentationEnabled ? (Stopwatch()..start()) : null;
+    final Map<String, List<InterestMatchReason>> matches = explain(event);
+    final Set<String> interests = Set<String>.from(
+      Free2bInterest.values.where(matches.containsKey),
+    );
+
+    if (stopwatch != null) {
+      stopwatch.stop();
+      _classificationInvocationCount++;
+      _classificationElapsedMicroseconds += stopwatch.elapsedMicroseconds;
+      if (_classificationInvocationCount % 100 == 0) {
+        debugPrint(
+          '[performance] Interest classification: '
+          'calls=$_classificationInvocationCount, '
+          'total=${classificationElapsed.inMilliseconds}ms',
+        );
+      }
+    }
+
+    return interests;
+  }
 
   /// Development/test helper showing every accepted match and its evidence.
   static Map<String, List<InterestMatchReason>> explain(EventModel event) {

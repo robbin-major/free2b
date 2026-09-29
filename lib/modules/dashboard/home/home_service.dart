@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_template/modules/authentication/model/user_model.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_preferences.dart';
@@ -20,11 +21,27 @@ class HomeScreenService {
       final String userID = AuthSessionService.userId;
       final List<EventModel> eventList = <EventModel>[];
       CollectionReference collectionRef = FirebaseFirestore.instance.collection('event');
+      final bool measurePerformance = kDebugMode || kProfileMode;
+      final Stopwatch? fetchStopwatch =
+          measurePerformance ? (Stopwatch()..start()) : null;
       QuerySnapshot querySnapshot =
           await collectionRef.where("uid", isNotEqualTo: userID).where("status", isEqualTo: EventStatus.APPROVAL.eventType).get();
+      fetchStopwatch?.stop();
+      final Stopwatch? parsingStopwatch =
+          measurePerformance ? (Stopwatch()..start()) : null;
       for (var element in querySnapshot.docs) {
         final EventModel eventModel = EventModel.fromJson(element.data() as Map<String, dynamic>);
         eventList.add(eventModel.copyWith(eventID: element.id));
+      }
+      parsingStopwatch?.stop();
+
+      if (measurePerformance) {
+        debugPrint(
+          '[performance] Home event query: '
+          'fetch=${fetchStopwatch!.elapsedMilliseconds}ms, '
+          'documents=${querySnapshot.docs.length}, '
+          'parsing=${parsingStopwatch!.elapsedMilliseconds}ms',
+        );
       }
 
       eventList.removeWhere(

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_template/modules/dashboard/calender/controller/celender_controller.dart';
+import 'package:flutter_template/modules/dashboard/dash_board/controller/dash_controller.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
@@ -38,6 +39,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
   late DateTime _displayedMonth;
   late DateTime _selectedDate;
   bool _isEventSheetOpen = false;
+  Worker? _tabWorker;
 
   @override
   void initState() {
@@ -48,6 +50,20 @@ class _CalenderScreenState extends State<CalenderScreen> {
     _selectedDate = DateTime(now.year, now.month, now.day);
     _monthPageController = PageController(initialPage: _initialMonthPage);
     _calenderController.closeEventSheet = _closeEventSheet;
+    if (Get.isRegistered<DashBoardController>()) {
+      final DashBoardController dashboardController =
+          Get.find<DashBoardController>();
+      _tabWorker = ever<int>(dashboardController.currentIndex, (int index) {
+        if (index == 1) {
+          _calenderController.ensureEventDataLoaded();
+        }
+      });
+      if (dashboardController.currentIndex.value == 1) {
+        _calenderController.ensureEventDataLoaded();
+      }
+    } else {
+      _calenderController.ensureEventDataLoaded();
+    }
   }
 
   @override
@@ -55,6 +71,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
     if (_calenderController.closeEventSheet == _closeEventSheet) {
       _calenderController.closeEventSheet = null;
     }
+    _tabWorker?.dispose();
     _monthPageController.dispose();
     super.dispose();
   }
@@ -377,33 +394,19 @@ class _CalenderScreenState extends State<CalenderScreen> {
   }
 
   List<EventModel> _eventsForDay(DateTime date) {
-    return _calenderController.eventData.where((event) {
-      final DateTime? eventDate = _eventDate(event);
-      return eventDate != null && DateUtils.isSameDay(eventDate, date);
-    }).toList();
+    return _calenderController.eventsForDay(date);
   }
 
   List<EventModel> _sortedEventsForDay(DateTime date) {
-    return _eventsForDay(date)
-      ..sort((a, b) {
-        final DateTime? aDate = _eventDate(a);
-        final DateTime? bDate = _eventDate(b);
-
-        if (aDate == null || bDate == null) {
-          return 0;
-        }
-
-        return aDate.compareTo(bDate);
-      });
+    return _eventsForDay(date);
   }
 
   DateTime? _eventDate(EventModel event) {
-    return EventDateUtils.parseEventDateTime(event.startDate);
+    return _calenderController.eventStartDate(event);
   }
 
   DateTime? _eventEffectiveEndDate(EventModel event) {
-    return EventDateUtils.parseEventDateTime(event.endDate) ??
-        EventDateUtils.parseEventDateTime(event.startDate);
+    return _calenderController.eventEffectiveEndDate(event);
   }
 
   bool _isPastDate(DateTime date) {

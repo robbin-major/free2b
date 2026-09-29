@@ -55,7 +55,7 @@ class DashBoard extends StatelessWidget {
                 if (wasCalendarSelected) {
                   calenderController.closeOpenEventSheet();
                 }
-                await calenderController.doGetEventData();
+                await calenderController.ensureEventDataLoaded();
               }
             },
             items: [

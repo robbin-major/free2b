@@ -4,6 +4,46 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EventInterestClassifier', () {
+    test('optimized classification remains equivalent to the legacy result', () {
+      final List<EventModel> events = <EventModel>[
+        EventModel(
+          title: 'Family Film Screening: Encanto',
+          sourceTypes: const <String>['Film Screenings'],
+          audiences: const <String>['Families', 'Kids'],
+        ),
+        EventModel(
+          title: 'Jazz and Dance Workshop',
+          sourceTags: const <String>['music', 'dance'],
+          description: const <String>['A hands on workshop for beginners.'],
+        ),
+        EventModel(
+          title: 'Neighborhood History Lecture',
+          description: const <String>['A historical lecture about Chicago.'],
+        ),
+        EventModel(title: 'Unclassified gathering'),
+      ];
+
+      for (final EventModel event in events) {
+        final Set<String> legacyResult = Set<String>.from(
+          Free2bInterest.values.where(
+            EventInterestClassifier.explain(event).containsKey,
+          ),
+        );
+
+        expect(EventInterestClassifier.classify(event), legacyResult);
+      }
+    });
+
+    test('classification records one invocation per event', () {
+      EventInterestClassifier.resetPerformanceMetrics();
+
+      EventInterestClassifier.classify(
+        EventModel(title: 'Outdoor jazz concert'),
+      );
+
+      expect(EventInterestClassifier.classificationInvocationCount, 1);
+    });
+
     test('normalizes existing Admin categories and ignores provider facets', () {
       final event = EventModel(
         category: <Category>[

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -13,6 +14,31 @@ class MapEventLocation {
 
   final EventModel event;
   final LatLng position;
+}
+
+class MapLocationResolutionMetrics {
+  const MapLocationResolutionMetrics({
+    required this.total,
+    required this.stored,
+    required this.cached,
+    required this.geocoded,
+    required this.failed,
+    required this.duration,
+  });
+
+  final int total;
+  final int stored;
+  final int cached;
+  final int geocoded;
+  final int failed;
+  final Duration duration;
+}
+
+class _MutableResolutionMetrics {
+  int stored = 0;
+  int cached = 0;
+  int geocoded = 0;
+  int failed = 0;
 }
 
 enum ZipLookupStatus { empty, invalid, found, notFound, error }
@@ -32,42 +58,86 @@ class ZipLookupResult {
 class MapEventLocationService {
   static const String _coordinateCachePrefix = 'map_coordinate_cache_v1';
   static const String _zipCachePrefix = 'map_zip_cache_v1';
+  MapLocationResolutionMetrics? lastBatchMetrics;
 
   Future<List<MapEventLocation>> resolveEventLocations(
     List<EventModel> events,
   ) async {
+    final bool measurePerformance = kDebugMode || kProfileMode;
+    final Stopwatch? stopwatch =
+        measurePerformance ? (Stopwatch()..start()) : null;
+    final _MutableResolutionMetrics? metrics =
+        measurePerformance ? _MutableResolutionMetrics() : null;
     final List<MapEventLocation> resolved = <MapEventLocation>[];
 
     for (final EventModel event in events) {
-      final LatLng? position = await resolveEventLocation(event);
+      final LatLng? position = await _resolveEventLocation(
+        event,
+        metrics: metrics,
+      );
       if (position != null) {
         resolved.add(MapEventLocation(event: event, position: position));
       }
+    }
+
+    stopwatch?.stop();
+    if (measurePerformance) {
+      final _MutableResolutionMetrics measuredMetrics = metrics!;
+      final Stopwatch measuredStopwatch = stopwatch!;
+      lastBatchMetrics = MapLocationResolutionMetrics(
+        total: events.length,
+        stored: measuredMetrics.stored,
+        cached: measuredMetrics.cached,
+        geocoded: measuredMetrics.geocoded,
+        failed: measuredMetrics.failed,
+        duration: measuredStopwatch.elapsed,
+      );
+      debugPrint(
+        '[performance] Discover location resolution: '
+        'events=${events.length}, stored=${measuredMetrics.stored}, '
+        'cached=${measuredMetrics.cached}, '
+        'geocoded=${measuredMetrics.geocoded}, '
+        'failed=${measuredMetrics.failed}, '
+        'duration=${measuredStopwatch.elapsedMilliseconds}ms',
+      );
     }
 
     return resolved;
   }
 
   Future<LatLng?> resolveEventLocation(EventModel event) async {
+    return _resolveEventLocation(event);
+  }
+
+  Future<LatLng?> _resolveEventLocation(
+    EventModel event, {
+    _MutableResolutionMetrics? metrics,
+  }) async {
     final LatLng? stored = _storedEventPosition(event);
     if (stored != null) {
+      metrics?.stored++;
       return stored;
     }
 
     final String query = _eventLocationQuery(event);
     if (query.isEmpty) {
+      metrics?.failed++;
       return null;
     }
 
     final String cacheKey = _eventCacheKey(event, query);
     final LatLng? cached = await _readCachedPosition(cacheKey);
     if (cached != null) {
+      metrics?.cached++;
       return cached;
     }
 
     final LatLng? geocoded = await _geocode(query);
     if (geocoded != null) {
+      metrics?.geocoded++;
       await _writeCachedPosition(cacheKey, geocoded);
+    } else {
+      metrics?.failed++;
     }
 
     return geocoded;

@@ -50,4 +50,23 @@ void main() {
       expect(service.normalizeZip('abc'), '');
     });
   });
+
+  group('MapEventLocationService batch resolution', () {
+    test('uses stored coordinates and records one batch result', () async {
+      final MapEventLocationService service = MapEventLocationService();
+      final List<MapEventLocation> locations =
+          await service.resolveEventLocations(<EventModel>[
+        EventModel(
+          eventID: 'event-1',
+          latitude: 41.8781,
+          longitude: -87.6298,
+        ),
+      ]);
+
+      expect(locations, hasLength(1));
+      expect(service.lastBatchMetrics?.total, 1);
+      expect(service.lastBatchMetrics?.stored, 1);
+      expect(service.lastBatchMetrics?.geocoded, 0);
+    });
+  });
 }

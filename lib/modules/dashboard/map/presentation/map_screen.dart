@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_template/modules/dashboard/dash_board/controller/dash_controller.dart';
 import 'package:flutter_template/modules/dashboard/home/controller/home_controller.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/modules/dashboard/map/data/map_event_location_service.dart';
@@ -34,16 +35,19 @@ class _MapScreenState extends State<MapScreen> {
   final FocusNode _zipFocusNode = FocusNode();
 
   Worker? _eventWorker;
+  Worker? _tabWorker;
   Timer? _zipDebounce;
   bool _isResolvingLocations = false;
   bool _isZipLoading = false;
   bool _isLocating = false;
   int _locationResolutionGeneration = 0;
+  bool _hasActivated = false;
   String _zipFilter = '';
   String? _message;
   String? _originLabel;
   LatLng? _distanceOrigin;
-  List<MapEventLocation> _resolvedEvents = <MapEventLocation>[];
+  Map<String, LatLng> _resolvedPositions = <String, LatLng>{};
+  Map<String, double> _distanceMilesByEvent = <String, double>{};
 
   @override
   void initState() {
@@ -51,16 +55,32 @@ class _MapScreenState extends State<MapScreen> {
     _homeController = Get.isRegistered<HomeController>()
         ? Get.find<HomeController>()
         : Get.put(HomeController());
-    _resolveEventLocations();
     _eventWorker = ever<List<EventModel>>(_homeController.eventData, (_) {
-      _resolveEventLocations();
+      if (_hasActivated && _homeController.eventData.isNotEmpty) {
+        _resolveEventLocations();
+      }
     });
+    if (Get.isRegistered<DashBoardController>()) {
+      final DashBoardController dashboardController =
+          Get.find<DashBoardController>();
+      _tabWorker = ever<int>(dashboardController.currentIndex, (int index) {
+        if (index == 2) {
+          _activateDiscovery();
+        }
+      });
+      if (dashboardController.currentIndex.value == 2) {
+        _activateDiscovery();
+      }
+    } else {
+      _activateDiscovery();
+    }
   }
 
   @override
   void dispose() {
     _zipDebounce?.cancel();
     _eventWorker?.dispose();
+    _tabWorker?.dispose();
     _zipController.dispose();
     _zipFocusNode.dispose();
     super.dispose();
@@ -154,7 +174,7 @@ class _MapScreenState extends State<MapScreen> {
                           final LatLng? position = _positionFor(event);
                           return _DiscoveryEventCard(
                             event: event,
-                            distance: _distanceLabel(position),
+                            distance: _distanceLabel(event),
                             canOpenDirections:
                                 position != null || _eventAddress(event).isNotEmpty,
                             onTap: () => _openEvent(event),
@@ -173,7 +193,14 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _refreshEvents() async {
     await _homeController.getEvent();
-    await _resolveEventLocations();
+  }
+
+  void _activateDiscovery() {
+    if (_hasActivated) return;
+    _hasActivated = true;
+    if (_homeController.eventData.isNotEmpty) {
+      _resolveEventLocations();
+    }
   }
 
   Future<void> _resolveEventLocations() async {
@@ -192,7 +219,11 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     setState(() {
-      _resolvedEvents = resolved;
+      _resolvedPositions = <String, LatLng>{
+        for (final MapEventLocation location in resolved)
+          _eventKey(location.event): location.position,
+      };
+      _rebuildDistanceCache();
       _isResolvingLocations = false;
     });
   }
@@ -212,8 +243,8 @@ class _MapScreenState extends State<MapScreen> {
 
     events.sort((a, b) {
       if (_distanceOrigin != null) {
-        final double? aDistance = _distanceMiles(_positionFor(a));
-        final double? bDistance = _distanceMiles(_positionFor(b));
+        final double? aDistance = _distanceMilesByEvent[_eventKey(a)];
+        final double? bDistance = _distanceMilesByEvent[_eventKey(b)];
         if (aDistance != null && bDistance != null) {
           final int comparison = aDistance.compareTo(bDistance);
           if (comparison != 0) return comparison;
@@ -238,16 +269,41 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   LatLng? _positionFor(EventModel event) {
+    return _resolvedPositions[_eventKey(event)];
+  }
+
+  String _eventKey(EventModel event) {
     final String eventId = (event.eventID ?? '').trim();
-    for (final MapEventLocation location in _resolvedEvents) {
-      if (identical(location.event, event)) {
-        return location.position;
-      }
-      if (eventId.isNotEmpty && eventId == location.event.eventID) {
-        return location.position;
-      }
+    if (eventId.isNotEmpty) return 'event:$eventId';
+
+    final String source = (event.source ?? '').trim();
+    final String sourceId = (event.sourceId ?? '').trim();
+    if (source.isNotEmpty && sourceId.isNotEmpty) {
+      return 'source:$source:$sourceId';
     }
-    return null;
+
+    return 'identity:${identityHashCode(event)}';
+  }
+
+  void _rebuildDistanceCache() {
+    final LatLng? origin = _distanceOrigin;
+    if (origin == null) {
+      _distanceMilesByEvent = <String, double>{};
+      return;
+    }
+
+    _distanceMilesByEvent = _resolvedPositions.map(
+      (String key, LatLng destination) => MapEntry<String, double>(
+        key,
+        Geolocator.distanceBetween(
+              origin.latitude,
+              origin.longitude,
+              destination.latitude,
+              destination.longitude,
+            ) /
+            1609.344,
+      ),
+    );
   }
 
   void _onZipChanged(String value) {
@@ -260,6 +316,7 @@ class _MapScreenState extends State<MapScreen> {
           : null;
       if (normalized.isEmpty) {
         _distanceOrigin = null;
+        _rebuildDistanceCache();
         _originLabel = null;
       }
     });
@@ -293,6 +350,7 @@ class _MapScreenState extends State<MapScreen> {
       _isZipLoading = false;
       if (result.position != null) {
         _distanceOrigin = result.position;
+        _rebuildDistanceCache();
         _originLabel = zipCode;
       }
       switch (result.status) {
@@ -315,6 +373,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _zipFilter = '';
       _distanceOrigin = null;
+      _rebuildDistanceCache();
       _originLabel = null;
       _message = null;
     });
@@ -342,6 +401,7 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _isLocating = false;
       _distanceOrigin = LatLng(position.latitude, position.longitude);
+      _rebuildDistanceCache();
       _originLabel = 'Current location';
       _zipFilter = '';
       _zipController.clear();
@@ -349,20 +409,8 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  double? _distanceMiles(LatLng? destination) {
-    final LatLng? origin = _distanceOrigin;
-    if (origin == null || destination == null) return null;
-    final double meters = Geolocator.distanceBetween(
-      origin.latitude,
-      origin.longitude,
-      destination.latitude,
-      destination.longitude,
-    );
-    return meters / 1609.344;
-  }
-
-  String? _distanceLabel(LatLng? destination) {
-    final double? miles = _distanceMiles(destination);
+  String? _distanceLabel(EventModel event) {
+    final double? miles = _distanceMilesByEvent[_eventKey(event)];
     if (miles == null) return null;
     if (miles < 0.1) return '<0.1 mi away';
     return '${miles.toStringAsFixed(miles < 10 ? 1 : 0)} mi away';
