@@ -34,8 +34,17 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Test
-        run: flutter test
+      - name: Test event interest classifier
+        run: flutter test test/event_interest_classifier_test.dart
+
+      - name: Test event images
+        run: flutter test test/event_image_test.dart
+
+      - name: Test map event locations
+        run: flutter test test/map_event_location_service_test.dart
+
+      - name: Test external map destinations
+        run: flutter test test/event_maps_test.dart
 
       - name: Validate Android signing secrets
         env:
