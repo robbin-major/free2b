@@ -7,19 +7,16 @@ void main() {
   testWidgets('bounds network image decoding to rendered logical size', (
     WidgetTester tester,
   ) async {
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       const MaterialApp(
-        home: MediaQuery(
-          data: MediaQueryData(
-            size: Size(400, 800),
-            devicePixelRatio: 2,
-          ),
-          child: Scaffold(
-            body: EventImage(
-              imageUrl: 'https://example.com/event.jpg',
-              width: 76,
-              height: 50,
-            ),
+        home: Scaffold(
+          body: EventImage(
+            imageUrl: 'https://example.com/event.jpg',
+            width: 76,
+            height: 50,
           ),
         ),
       ),
