@@ -1,5 +1,6 @@
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, kProfileMode;
 
 const bool _performanceInstrumentationEnabled = kDebugMode || kProfileMode;
 
