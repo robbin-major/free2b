@@ -10,20 +10,24 @@ void main() {
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    late BuildContext buildContext;
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: EventImage(
-            imageUrl: 'https://example.com/event.jpg',
-            width: 76,
-            height: 50,
-          ),
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            buildContext = context;
+            return const SizedBox.shrink();
+          },
         ),
       ),
     );
 
-    final CachedNetworkImage image =
-        tester.widget<CachedNetworkImage>(find.byType(CachedNetworkImage));
+    final SizedBox imageBox = const EventImage(
+      imageUrl: 'https://example.com/event.jpg',
+      width: 76,
+      height: 50,
+    ).build(buildContext) as SizedBox;
+    final CachedNetworkImage image = imageBox.child! as CachedNetworkImage;
     expect(image.memCacheWidth, 152);
     expect(image.memCacheHeight, 100);
   });
