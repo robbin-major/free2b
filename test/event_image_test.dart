@@ -8,13 +8,13 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MediaQuery(
-        data: MediaQueryData(
-          size: Size(400, 800),
-          devicePixelRatio: 2,
-        ),
-        child: MaterialApp(
-          home: Scaffold(
+      const MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: Size(400, 800),
+            devicePixelRatio: 2,
+          ),
+          child: Scaffold(
             body: EventImage(
               imageUrl: 'https://example.com/event.jpg',
               width: 76,
