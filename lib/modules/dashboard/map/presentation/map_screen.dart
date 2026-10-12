@@ -7,6 +7,7 @@ import 'package:flutter_template/modules/dashboard/dash_board/controller/dash_co
 import 'package:flutter_template/modules/dashboard/home/controller/home_controller.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/modules/dashboard/map/data/map_event_location_service.dart';
+import 'package:flutter_template/modules/dashboard/map/presentation/discovery_map_view.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/utils/event_maps.dart';
@@ -42,6 +43,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _isLocating = false;
   int _locationResolutionGeneration = 0;
   bool _hasActivated = false;
+  DiscoveryViewMode _viewMode = DiscoveryViewMode.list;
   String _zipFilter = '';
   String? _message;
   String? _originLabel;
@@ -89,6 +91,9 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final List<EventModel> visibleEvents = _visibleEvents();
+    final List<MapEventLocation> visibleLocations = _visibleLocations(
+      visibleEvents,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -148,11 +153,31 @@ class _MapScreenState extends State<MapScreen> {
                       width: 18.w,
                       child: const CircularProgressIndicator(strokeWidth: 2),
                     ),
+                  if (discoveryMapEnabled) ...[
+                    SizedBox(width: 12.w),
+                    _DiscoveryViewToggle(
+                      value: _viewMode,
+                      onChanged: (DiscoveryViewMode value) {
+                        setState(() => _viewMode = value);
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
             Expanded(
-              child: visibleEvents.isEmpty &&
+              child: discoveryMapEnabled &&
+                      _viewMode == DiscoveryViewMode.map
+                  ? DiscoveryMapView(
+                      events: visibleLocations,
+                      recenterTarget: _distanceOrigin,
+                      isLoading: _isResolvingLocations ||
+                          _homeController.isEventLoading.value,
+                      onEventTap: _openEvent,
+                      onDirections: (EventModel event, LatLng position) =>
+                          _openDirections(event, position),
+                    )
+                  : visibleEvents.isEmpty &&
                       !_isResolvingLocations &&
                       !_homeController.isEventLoading.value
                   ? _EmptyDiscoveryState(
@@ -270,6 +295,18 @@ class _MapScreenState extends State<MapScreen> {
 
   LatLng? _positionFor(EventModel event) {
     return _resolvedPositions[_eventKey(event)];
+  }
+
+  List<MapEventLocation> _visibleLocations(List<EventModel> events) {
+    return events
+        .map((EventModel event) {
+          final LatLng? position = _positionFor(event);
+          return position == null
+              ? null
+              : MapEventLocation(event: event, position: position);
+        })
+        .whereType<MapEventLocation>()
+        .toList(growable: false);
   }
 
   String _eventKey(EventModel event) {
@@ -611,6 +648,83 @@ class _DiscoveryHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryViewToggle extends StatelessWidget {
+  const _DiscoveryViewToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final DiscoveryViewMode value;
+  final ValueChanged<DiscoveryViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey<String>('discovery-view-toggle'),
+      padding: EdgeInsets.all(3.w),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _button(
+            label: 'List',
+            icon: Icons.view_agenda_outlined,
+            mode: DiscoveryViewMode.list,
+          ),
+          _button(
+            label: 'Map',
+            icon: Icons.map_outlined,
+            mode: DiscoveryViewMode.map,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _button({
+    required String label,
+    required IconData icon,
+    required DiscoveryViewMode mode,
+  }) {
+    final bool selected = value == mode;
+    return InkWell(
+      key: ValueKey<String>('discovery-${mode.name}-view'),
+      onTap: () => onChanged(mode),
+      borderRadius: BorderRadius.circular(9.r),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: 9.w, vertical: 7.h),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(9.r),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 15.sp,
+              color: selected ? Colors.black : AppColors.textSecondary,
+            ),
+            SizedBox(width: 5.w),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.black : AppColors.textSecondary,
+                fontSize: 11.sp,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

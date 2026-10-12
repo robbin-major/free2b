@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_template/modules/dashboard/home/controller/details_controller.dart';
+import 'package:flutter_template/modules/dashboard/home/presentation/attendance_preview.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
@@ -164,7 +165,7 @@ class DetailsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildAttendingPreview(),
+          Obx(() => _buildAttendingPreview()),
           if (!hasEnded)
             Obx(
               () => _buildPrimaryAttendingButton(context),
@@ -341,11 +342,12 @@ class DetailsScreen extends StatelessWidget {
   }
 
   Widget _buildAttendingPreview() {
-    final int attendingCount =
-        _detailController.userData.value?.attending?.length ?? 0;
-    final String previewText = attendingCount > 0
-        ? '$attendingCount attending'
-        : 'Be one of the first to mark yourself attending';
+    final String? previewText = attendancePreviewMessage(
+      isAttending: _isAttendingEvent(),
+    );
+    if (previewText == null) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: EdgeInsets.all(14.h),
@@ -1032,9 +1034,10 @@ class DetailsScreen extends StatelessWidget {
   bool _isAttendingEvent() {
     final String eventId = _detailController.eventModel.eventID ?? '';
 
-    return eventId.isNotEmpty &&
-        (_detailController.userData.value?.attending?.contains(eventId) ??
-            false);
+    return isEventAttending(
+      attendingEventIds: _detailController.attendingId,
+      eventId: eventId,
+    );
   }
 
   Future<void> _toggleAttending(BuildContext context) async {

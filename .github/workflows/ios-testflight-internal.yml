@@ -1,15 +1,17 @@
 name: iOS Internal TestFlight
 
 on:
-  push:
-    branches:
-      - fix/auth-location-calendar-agenda
   workflow_dispatch:
     inputs:
       upload_testflight:
         description: Upload the signed IPA to TestFlight
         required: true
-        default: true
+        default: false
+        type: boolean
+      enable_discovery_map:
+        description: Enable the optional Discover embedded map for testing
+        required: true
+        default: false
         type: boolean
 
 permissions:
@@ -32,6 +34,7 @@ jobs:
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.IOS_GOOGLE_MAPS_API_KEY }}
 
     steps:
       - name: Checkout
@@ -47,7 +50,8 @@ jobs:
             IOS_KEYCHAIN_PASSWORD \
             APP_STORE_CONNECT_ISSUER_ID \
             APP_STORE_CONNECT_KEY_ID \
-            APP_STORE_CONNECT_PRIVATE_KEY
+            APP_STORE_CONNECT_PRIVATE_KEY \
+            GOOGLE_MAPS_API_KEY
           do
             if [ -z "${!name}" ]; then
               echo "$name is not configured."
@@ -73,12 +77,22 @@ jobs:
           mkdir -p ios
           cp -R Runner Runner.xcodeproj Runner.xcworkspace RunnerTests Flutter Podfile ios/
 
+      - name: Configure iOS Google Maps key
+        run: |
+          if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+            echo "GOOGLE_MAPS_API_KEY is not configured."
+            exit 1
+          fi
+          printf 'GOOGLE_MAPS_API_KEY=%s\n' "$GOOGLE_MAPS_API_KEY" > ios/Flutter/GoogleMapsKeys.xcconfig
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Analyze
-        continue-on-error: true
-        run: flutter analyze
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+
+      - name: Test
+        run: flutter test
 
       - name: Install FlutterFire CLI
         run: dart pub global activate flutterfire_cli
@@ -147,7 +161,7 @@ jobs:
           PROFILE_PATH="$RUNNER_TEMP/free2b_appstore.mobileprovision"
           PROFILE_PLIST_PATH="$RUNNER_TEMP/free2b_appstore.plist"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-          export CERTIFICATE_PATH PROFILE_PATH
+          export CERTIFICATE_PATH PROFILE_PATH PROFILE_PLIST_PATH
 
           python3 - <<'PY'
           import base64
@@ -182,6 +196,35 @@ jobs:
             echo "Provisioning profile could not be decoded as a signed mobileprovision file."
             exit 1
           fi
+
+          python3 - <<'PY'
+          import datetime
+          import os
+          import plistlib
+          import sys
+
+          with open(os.environ["PROFILE_PLIST_PATH"], "rb") as profile_file:
+              profile = plistlib.load(profile_file)
+
+          expiration = profile.get("ExpirationDate")
+          now = datetime.datetime.now(datetime.timezone.utc)
+          if expiration is None:
+              print("Provisioning profile has no ExpirationDate.")
+              sys.exit(1)
+          if expiration.tzinfo is None:
+              expiration = expiration.replace(tzinfo=datetime.timezone.utc)
+          if expiration <= now:
+              print("Provisioning profile is expired.")
+              sys.exit(1)
+
+          entitlements = profile.get("Entitlements", {})
+          apple_sign_in = entitlements.get("com.apple.developer.applesignin", [])
+          if "Default" not in apple_sign_in:
+              print("Provisioning profile is missing the Sign in with Apple entitlement.")
+              sys.exit(1)
+
+          print(f"Provisioning profile is valid through {expiration.date()} and includes Sign in with Apple.")
+          PY
 
           PROFILE_TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "$PROFILE_PLIST_PATH")"
           PROFILE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print Entitlements:application-identifier' "$PROFILE_PLIST_PATH" 2>/dev/null | sed "s/^${PROFILE_TEAM_ID}\.//" || true)"
@@ -266,11 +309,14 @@ jobs:
           PY
 
       - name: Build signed IPA
+        env:
+          DISCOVERY_MAP_ENABLED: ${{ inputs.enable_discovery_map }}
         run: |
           flutter build ipa \
             --release \
             --build-name="$IOS_BUILD_NAME" \
             --build-number="$IOS_BUILD_NUMBER" \
+            --dart-define=FREE2B_ENABLE_DISCOVERY_MAP="$DISCOVERY_MAP_ENABLED" \
             --export-options-plist=ios/ExportOptions.plist
 
       - name: Verify IPA version metadata
@@ -288,6 +334,7 @@ jobs:
           INFO_PLIST="$APP_PATH/Info.plist"
           ARCHIVE_BUILD_NAME="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$INFO_PLIST")"
           ARCHIVE_BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$INFO_PLIST")"
+          ARCHIVE_MAPS_KEY="$(/usr/libexec/PlistBuddy -c 'Print GoogleMapsApiKey' "$INFO_PLIST" 2>/dev/null || true)"
           echo "IPA CFBundleShortVersionString: $ARCHIVE_BUILD_NAME"
           echo "IPA CFBundleVersion: $ARCHIVE_BUILD_NUMBER"
           if [ "$ARCHIVE_BUILD_NAME" != "$IOS_BUILD_NAME" ]; then
@@ -296,6 +343,10 @@ jobs:
           fi
           if [ "$ARCHIVE_BUILD_NUMBER" != "$IOS_BUILD_NUMBER" ] || [ "$ARCHIVE_BUILD_NUMBER" -le 44 ]; then
             echo "IPA build number must match $IOS_BUILD_NUMBER and be greater than 44."
+            exit 1
+          fi
+          if [ -z "$ARCHIVE_MAPS_KEY" ] || printf '%s' "$ARCHIVE_MAPS_KEY" | grep -qF '$('; then
+            echo "IPA GoogleMapsApiKey is empty or unresolved."
             exit 1
           fi
 
@@ -308,7 +359,7 @@ jobs:
           retention-days: 14
 
       - name: Upload to TestFlight
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.upload_testflight == true)
+        if: inputs.upload_testflight == true
         run: |
           IPA_PATH="$(find build/ios/ipa -type f -name '*.ipa' -print -quit)"
           if [ -z "$IPA_PATH" ]; then

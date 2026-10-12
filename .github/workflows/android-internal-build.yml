@@ -5,6 +5,12 @@ on:
     branches:
       - fix/auth-location-calendar-agenda
   workflow_dispatch:
+    inputs:
+      enable_discovery_map:
+        description: Enable the optional Discover embedded map for testing
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,17 +40,8 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
 
-      - name: Test event interest classifier
-        run: flutter test test/event_interest_classifier_test.dart
-
-      - name: Test event images
-        run: flutter test test/event_image_test.dart
-
-      - name: Test map event locations
-        run: flutter test test/map_event_location_service_test.dart
-
-      - name: Test external map destinations
-        run: flutter test test/event_maps_test.dart
+      - name: Test
+        run: flutter test
 
       - name: Validate Android signing secrets
         env:
@@ -89,7 +86,12 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-        run: flutter build appbundle --release --no-shrink
+          DISCOVERY_MAP_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_discovery_map || false }}
+        run: |
+          flutter build appbundle \
+            --release \
+            --no-shrink \
+            --dart-define=FREE2B_ENABLE_DISCOVERY_MAP="$DISCOVERY_MAP_ENABLED"
 
       - name: Verify release Maps manifest metadata
         run: |

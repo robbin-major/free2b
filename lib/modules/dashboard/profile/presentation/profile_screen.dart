@@ -359,53 +359,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         fontWeight: FontWeight.w700,
                                         fontSize: 18.sp,
                                       ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          Navigation.replaceAll(
-                                            Routes.dashBoard,
-                                            arg: {'initialIndex': 2},
-                                          );
-                                        },
-                                        child: Container(
-                                          margin: EdgeInsets.only(top: 12.h),
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 14.w,
-                                            vertical: 8.h,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors
-                                                .backgroundLightColor,
-                                            borderRadius:
-                                                BorderRadius.circular(8.r),
-                                            border: Border.all(
-                                              color: AppColors
-                                                  .yellowButtonColor
-                                                  .withValues(alpha: 0.38),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              SvgPicture.asset(
-                                                IconAsset.bookMark,
-                                                height: 16.h,
-                                                width: 16.w,
-                                                colorFilter: ColorFilter.mode(
-                                                  AppColors.yellowButtonColor,
-                                                  BlendMode.srcIn,
-                                                ),
-                                              ),
-                                              CommonText(
-                                                text: AppString.bookmark.tr,
-                                                fontSize: 13.sp,
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors
-                                                    .yellowButtonColor,
-                                              ).paddingOnly(left: 8.w),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
                                     ],
                                   );
                                 }),

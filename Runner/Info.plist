@@ -64,5 +64,7 @@
     <string>This app Accesses your photo library to allow you to choose a profile image</string>
     <key>NSCameraUsageDescription</key>
     <string>Uses your camera to allow you to take a photo for your profile image.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Free2B uses your location to show nearby events and recenter event discovery.</string>
 </dict>
 </plist>
