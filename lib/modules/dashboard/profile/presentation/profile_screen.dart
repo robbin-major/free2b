@@ -10,6 +10,8 @@ import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/auth_session_service.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
+import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/utils/utils.dart';
@@ -496,9 +498,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                                           .paddingOnly(right: 8.w),
                                       Expanded(
                                         child: CommonText(
-                                          text: "${Utils.getFormattedDate(
-                                            format: "d-M-yyyy",
-                                            date: "${value.startDate}",
+                                          text: "${EventDateUtils.formatEventDateForLocale(
+                                            value.startDate,
+                                            Localizations.localeOf(context)
+                                                .toString(),
                                           )} at "
                                               "${Utils.getDateTime(
                                             format: "hh:mm a",
@@ -519,9 +522,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                           .paddingOnly(right: 8.w),
                                       Expanded(
                                         child: CommonText(
-                                          text: ((value.aptSuiteOther ?? "") +
-                                              (value.address ?? '') +
-                                              (value.country ?? "")),
+                                          text: eventLocationText(value),
                                           fontWeight: FontWeight.w600,
                                           fontSize: 12.sp,
                                           softWrap: true,

@@ -7,6 +7,7 @@ import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/app_colors.dart';
 import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/appbar.dart';
@@ -313,10 +314,10 @@ class _CalenderScreenState extends State<CalenderScreen> {
     final bool isSelected = DateUtils.isSameDay(date, _selectedDate);
     final List<EventModel> eventsForDay = _eventsForDay(date);
     final bool hasEvents = eventsForDay.isNotEmpty;
-    final bool hasActiveEvents = eventsForDay.any((event) {
-      final DateTime? eventDate = _eventEffectiveEndDate(event);
-      return eventDate != null && !EventDateUtils.hasEventEnded(eventDate);
-    });
+    final bool hasActiveEvents = EventDateUtils.hasActiveAttendedEvent(
+      events: eventsForDay,
+      attendingEventIds: _calenderController.attendingEventIds,
+    );
 
     return InkWell(
       borderRadius: BorderRadius.circular(18),
@@ -717,7 +718,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
                           Expanded(
                             child: Text(
                               location,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.58),
@@ -785,18 +786,7 @@ class _CalenderScreenState extends State<CalenderScreen> {
   }
 
   String _eventLocation(EventModel event) {
-    if ((event.aptSuiteOther ?? '').trim().isNotEmpty) {
-      return event.aptSuiteOther!.trim();
-    }
-
-    if ((event.address ?? '').trim().isNotEmpty) {
-      return event.address!.trim();
-    }
-
-    return [
-      event.city,
-      event.state,
-    ].where((value) => (value ?? '').trim().isNotEmpty).join(', ');
+    return eventLocationText(event);
   }
 
 }

@@ -173,7 +173,7 @@ class EventModel {
         country: json["country"],
         uid: json["uid"],
         image: json["image"],
-        address: json["address"],
+        address: json["address"] ?? json["streetAddress"],
         city: json["city"],
         description: json["description"] == null
             ? []

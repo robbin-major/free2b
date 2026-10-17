@@ -1,10 +1,6 @@
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 
-String eventMapDestination(
-  EventModel event, {
-  double? fallbackLatitude,
-  double? fallbackLongitude,
-}) {
+String eventLocationText(EventModel event) {
   final String state = (event.state ?? '').trim();
   final String zipCode = (event.zipCode ?? '').trim();
   final String stateAndZip = <String>[state, zipCode]
@@ -33,7 +29,16 @@ String eventMapDestination(
     return values;
   });
 
-  if (parts.isNotEmpty) return parts.join(', ');
+  return parts.join(', ');
+}
+
+String eventMapDestination(
+  EventModel event, {
+  double? fallbackLatitude,
+  double? fallbackLongitude,
+}) {
+  final String location = eventLocationText(event);
+  if (location.isNotEmpty) return location;
   if (fallbackLatitude != null && fallbackLongitude != null) {
     return '$fallbackLatitude,$fallbackLongitude';
   }

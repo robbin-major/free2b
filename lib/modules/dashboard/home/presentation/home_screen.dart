@@ -9,6 +9,7 @@ import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
 import 'package:flutter_template/utils/event_interest_classifier.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/utils/navigation_utils/routes.dart';
 import 'package:flutter_template/widget/common_text.dart';
@@ -472,7 +473,8 @@ class _FeaturedEventCard extends StatelessWidget {
                               color: AppColors.textSecondary,
                               fontSize: 12.sp,
                               fontWeight: FontWeight.w500,
-                              maxLine: 1,
+                              maxLine: 2,
+                              softWrap: true,
                             ),
                           ],
                         ],
@@ -564,7 +566,8 @@ class _SoonEventCard extends StatelessWidget {
                           color: AppColors.textSecondary,
                           fontSize: 10.sp,
                           fontWeight: FontWeight.w500,
-                          maxLine: 1,
+                          maxLine: 3,
+                          softWrap: true,
                         ),
                       ],
                     ],
@@ -636,7 +639,8 @@ class _SearchEventCard extends StatelessWidget {
                         color: AppColors.textSecondary,
                         fontSize: 11.sp,
                         fontWeight: FontWeight.w500,
-                        maxLine: 1,
+                        maxLine: 2,
+                        softWrap: true,
                       ),
                     ],
                   ],
@@ -846,11 +850,5 @@ String _eventShortDate(EventModel event) {
 }
 
 String _eventPlace(EventModel event) {
-  final String venue = (event.venue ?? '').trim();
-  if (venue.isNotEmpty) return venue;
-  return <String?>[event.city, event.state]
-      .whereType<String>()
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty)
-      .join(', ');
+  return eventLocationText(event);
 }

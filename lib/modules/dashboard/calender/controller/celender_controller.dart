@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:flutter_template/modules/authentication/model/user_model.dart';
 import 'package:flutter_template/modules/dashboard/home/home_service.dart';
 import 'package:flutter_template/modules/dashboard/home/model/event_model.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
@@ -14,6 +15,7 @@ class CalenderController extends GetxController {
   DateTime? currentDate;
   RxList<EventModel> eventData = <EventModel>[].obs;
   RxBool isLoading = false.obs;
+  Set<String> attendingEventIds = <String>{};
   bool _hasLoaded = false;
   final Map<DateTime, List<EventModel>> _eventsByDay =
       <DateTime, List<EventModel>>{};
@@ -38,7 +40,9 @@ class CalenderController extends GetxController {
       isLoading.value = true;
       final List<EventModel> events =
           await HomeScreenService.getCalendarEventData();
+      final UserModel? userData = await HomeScreenService.getUserData();
       eventData.value = events;
+      attendingEventIds = userData?.attending?.toSet() ?? <String>{};
       _rebuildDayIndex(events);
       _hasLoaded = true;
       print("length ::::::::::${eventData.length}");

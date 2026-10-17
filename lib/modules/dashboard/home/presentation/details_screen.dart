@@ -8,6 +8,7 @@ import 'package:flutter_template/utils/app_string.dart';
 import 'package:flutter_template/utils/assets.dart';
 import 'package:flutter_template/utils/common_service/app_pref_service.dart';
 import 'package:flutter_template/utils/event_date_utils.dart';
+import 'package:flutter_template/utils/event_maps.dart';
 import 'package:flutter_template/utils/navigation_utils/navigation.dart';
 import 'package:flutter_template/widget/common_text.dart';
 import 'package:flutter_template/widget/event_image.dart';
@@ -971,18 +972,8 @@ class DetailsScreen extends StatelessWidget {
   }
 
   String _locationText() {
-    final List<String> parts = [
-      _detailController.eventModel.aptSuiteOther,
-      _detailController.eventModel.address,
-      _detailController.eventModel.city,
-      _detailController.eventModel.state,
-    ]
-        .whereType<String>()
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    return parts.isEmpty ? 'Location TBA' : parts.join(', ');
+    final String location = eventLocationText(_detailController.eventModel);
+    return location.isEmpty ? 'Location TBA' : location;
   }
 
   String _categoryLabel() {

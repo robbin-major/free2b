@@ -67,5 +67,31 @@ void main() {
       expect(uri.toString(), contains('destination='));
       expect(uri.toString(), isNot(contains(' ')));
     });
+
+    test('renders structured venue and street address together', () {
+      final EventModel event = EventModel.fromJson(<String, dynamic>{
+        'venue': 'Northside Park',
+        'streetAddress': '12 Example Avenue',
+        'city': 'Chicago',
+        'state': 'IL',
+        'zipCode': '60601',
+        'country': 'United States',
+      });
+
+      expect(
+        eventLocationText(event),
+        'Northside Park, 12 Example Avenue, Chicago, IL 60601',
+      );
+    });
+
+    test('keeps the available location when the source lacks a full address', () {
+      final EventModel event = EventModel(
+        venue: 'South Ingleside Avenue',
+        city: 'Chicago',
+        state: 'IL',
+      );
+
+      expect(eventLocationText(event), 'South Ingleside Avenue, Chicago, IL');
+    });
   });
 }
