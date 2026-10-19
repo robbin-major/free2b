@@ -13,6 +13,7 @@ class EventImage extends StatelessWidget {
     this.width,
     this.borderRadius,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
   });
 
   final String? imageUrl;
@@ -20,6 +21,7 @@ class EventImage extends StatelessWidget {
   final double? width;
   final BorderRadius? borderRadius;
   final BoxFit fit;
+  final Alignment alignment;
   static int _instrumentedBuildCount = 0;
 
   static int get instrumentedBuildCount => _instrumentedBuildCount;
@@ -59,6 +61,7 @@ class EventImage extends StatelessWidget {
             height: height,
             width: width,
             fit: fit,
+            alignment: alignment,
             memCacheWidth: memCacheWidth,
             memCacheHeight: memCacheHeight,
             placeholder: (context, url) => _fallbackImage(),
@@ -87,6 +90,7 @@ class EventImage extends StatelessWidget {
       height: height,
       width: width,
       fit: fit,
+      alignment: alignment,
     );
   }
 

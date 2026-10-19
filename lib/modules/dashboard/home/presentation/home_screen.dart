@@ -533,6 +533,8 @@ class _SoonEventCard extends StatelessWidget {
                 imageUrl: event.image,
                 height: 88.h,
                 width: double.infinity,
+                fit: BoxFit.contain,
+                alignment: Alignment.topCenter,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(14.r),
                 ),

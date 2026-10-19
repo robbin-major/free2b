@@ -80,7 +80,7 @@ class CalenderController extends GetxController {
       if (startDate == null) continue;
 
       final DateTime effectiveEndDate =
-          EventDateUtils.parseEventDateTime(event.endDate) ?? startDate;
+          EventDateUtils.effectiveEventEndDate(event) ?? startDate;
       _startDateByEvent[event] = startDate;
       _effectiveEndDateByEvent[event] = effectiveEndDate;
       _eventsByDay.putIfAbsent(

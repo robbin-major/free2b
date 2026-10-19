@@ -26,6 +26,41 @@ class EventDateUtils {
     return null;
   }
 
+  static DateTime? effectiveEventEndDate(EventModel event) {
+    final DateTime? startDate = parseEventDateTime(event.startDate);
+    if (startDate == null) {
+      return null;
+    }
+
+    final String endValue = event.endDate?.trim() ?? '';
+    final DateTime? fullEndDate = parseEventDateTime(endValue);
+    if (fullEndDate != null) {
+      return fullEndDate;
+    }
+
+    // Some imported events provide endTime without repeating the event date.
+    // Anchor that local wall-clock time to the start date instead of silently
+    // falling back to the start time.
+    for (final DateFormat format in <DateFormat>[
+      DateFormat('hh:mm a'),
+      DateFormat('h:mm a'),
+      DateFormat('HH:mm'),
+    ]) {
+      final DateTime? parsedTime = format.tryParse(endValue);
+      if (parsedTime != null) {
+        return DateTime(
+          startDate.year,
+          startDate.month,
+          startDate.day,
+          parsedTime.hour,
+          parsedTime.minute,
+        );
+      }
+    }
+
+    return startDate;
+  }
+
   static String? formatEventDateForLocale(String? eventDate, String locale) {
     final DateTime? parsedDate = parseEventDateTime(eventDate);
     if (parsedDate == null) {
@@ -53,21 +88,31 @@ class EventDateUtils {
     required Set<String> attendingEventIds,
     DateTime? now,
   }) {
-    final DateTime currentTime = now ?? DateTime.now();
+    // Event strings are stored as local wall-clock values. Normalize an
+    // injected UTC clock before comparing it with those local values.
+    final DateTime currentTime = (now ?? DateTime.now()).toLocal();
 
     return events.any((EventModel event) {
       if (!attendingEventIds.contains(event.eventID)) {
         return false;
       }
 
-      final DateTime? startDate = parseEventDateTime(event.startDate);
-      if (startDate == null) {
+      final DateTime? effectiveEndDate = effectiveEventEndDate(event);
+      if (effectiveEndDate == null) {
         return false;
       }
 
-      final DateTime effectiveEndDate =
-          parseEventDateTime(event.endDate) ?? startDate;
-      return !effectiveEndDate.isBefore(currentTime);
+      final String effectiveValue = (event.endDate?.trim().isNotEmpty ?? false)
+          ? event.endDate!.trim()
+          : event.startDate?.trim() ?? '';
+      final bool hasExplicitTime = effectiveValue.contains(':');
+
+      if (!hasExplicitTime) {
+        return !_startOfDay(effectiveEndDate)
+            .isBefore(_startOfDay(currentTime));
+      }
+
+      return effectiveEndDate.isAfter(currentTime);
     });
   }
 

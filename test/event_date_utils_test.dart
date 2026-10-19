@@ -101,5 +101,83 @@ void main() {
         isFalse,
       );
     });
+
+    test('expires the October 2 attendance after its local end time', () {
+      final EventModel event = EventModel(
+        eventID: 'october-2',
+        startDate: '02-10-2026 09:00 AM',
+        endDate: '02-10-2026 11:30 AM',
+      );
+
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'october-2'},
+          now: DateTime(2026, 10, 2, 11, 29),
+        ),
+        isTrue,
+      );
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'october-2'},
+          now: DateTime(2026, 10, 2, 11, 30),
+        ),
+        isFalse,
+      );
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'october-2'},
+          now: DateTime(2026, 10, 2, 11, 31),
+        ),
+        isFalse,
+      );
+    });
+
+    test('anchors an end-time-only value to the local start date', () {
+      final EventModel event = EventModel(
+        eventID: 'same-day',
+        startDate: '02-10-2026 09:00 AM',
+        endDate: '11:30 AM',
+      );
+
+      expect(
+        EventDateUtils.effectiveEventEndDate(event),
+        DateTime(2026, 10, 2, 11, 30),
+      );
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'same-day'},
+          now: DateTime(2026, 10, 2, 12),
+        ),
+        isFalse,
+      );
+    });
+
+    test('keeps a date-only attended event gold through its local day', () {
+      final EventModel event = EventModel(
+        eventID: 'date-only',
+        startDate: '02-10-2026',
+      );
+
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'date-only'},
+          now: DateTime(2026, 10, 2, 23, 59),
+        ),
+        isTrue,
+      );
+      expect(
+        EventDateUtils.hasActiveAttendedEvent(
+          events: <EventModel>[event],
+          attendingEventIds: <String>{'date-only'},
+          now: DateTime(2026, 10, 3),
+        ),
+        isFalse,
+      );
+    });
   });
 }
