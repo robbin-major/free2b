@@ -26,7 +26,7 @@ jobs:
     env:
       BUNDLE_ID: com.free2bapp.mobile
       APPLE_TEAM_ID: Y89WLT6JJ7
-      IOS_BUILD_NAME: 1.0.26
+      IOS_BUILD_NAME: 1.3.7
       IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
       IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
       IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
@@ -146,10 +146,10 @@ jobs:
             --data-urlencode "filter[preReleaseVersion.version]=$IOS_BUILD_NAME" \
             --data-urlencode 'limit=200' \
             https://api.appstoreconnect.apple.com/v1/builds)"
-          LATEST_BUILD="$(printf '%s' "$BUILDS_RESPONSE" | python3 -c 'import json,sys; versions=[int(item["attributes"]["version"]) for item in json.load(sys.stdin).get("data", []) if item.get("attributes", {}).get("version", "").isdigit()]; print(max(versions, default=44))')"
+          LATEST_BUILD="$(printf '%s' "$BUILDS_RESPONSE" | python3 -c 'import json,sys; versions=[int(item["attributes"]["version"]) for item in json.load(sys.stdin).get("data", []) if item.get("attributes", {}).get("version", "").isdigit()]; print(max(versions, default=45))')"
           IOS_BUILD_NUMBER="$((LATEST_BUILD + 1))"
-          if [ "$IOS_BUILD_NUMBER" -lt 45 ]; then
-            IOS_BUILD_NUMBER=45
+          if [ "$IOS_BUILD_NUMBER" -lt 46 ]; then
+            IOS_BUILD_NUMBER=46
           fi
           echo "Latest uploaded $IOS_BUILD_NAME build: $LATEST_BUILD"
           echo "Selected iOS build number: $IOS_BUILD_NUMBER"
